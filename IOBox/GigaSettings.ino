@@ -288,7 +288,7 @@ void Settings_LoadDefaults()
   hS.minValueOff = 25;
   hS.minValueOn = 25;
 
-  hS.minRelayValue = 25;
+  hS.minRelayValue = 30;
   hS.currentOutput = 0;
 
 

@@ -252,7 +252,12 @@ int State_GetHitachiSetPoint(bool onSettings)
 
 void Command_SetHitachiSetPoint(bool onSettings, int value)
 {
-  *State_HitachiSetPointPtr(onSettings) = constrain(value, 25, 100);
+  *State_HitachiSetPointPtr(onSettings) = constrain(value, hS.minRelayValue, 100);
+}
+
+void Command_SetHitachiMaxValue(bool onSettings, int value)
+{
+  *State_HitachiMaxValuePtr(onSettings) = constrain(value, hS.minRelayValue, 100);
 }
 
 int State_GetHitachiMaxValue(bool onSettings)
@@ -260,19 +265,14 @@ int State_GetHitachiMaxValue(bool onSettings)
   return *State_HitachiMaxValuePtr(onSettings);
 }
 
-void Command_SetHitachiMaxValue(bool onSettings, int value)
+void Command_SetHitachiMinValue(bool onSettings, int value)
 {
-  *State_HitachiMaxValuePtr(onSettings) = constrain(value, 25, 100);
+  *State_HitachiMinValuePtr(onSettings) = constrain(value, hS.minRelayValue, 100);
 }
 
 int State_GetHitachiMinValue(bool onSettings)
 {
   return *State_HitachiMinValuePtr(onSettings);
-}
-
-void Command_SetHitachiMinValue(bool onSettings, int value)
-{
-  *State_HitachiMinValuePtr(onSettings) = constrain(value, 25, 100);
 }
 
 int State_GetHitachiPeriod(bool onSettings)
@@ -308,16 +308,19 @@ void Command_ToggleHitachiPeriodPrecise(bool onSettings)
   );
 }
 
+
 void Command_NormalizeHitachiSettings()
 {
-  hS.setPointOn = constrain(hS.setPointOn, 25, 100);
-  hS.maxValueOn = constrain(hS.maxValueOn, 25, 100);
-  hS.minValueOn = constrain(hS.minValueOn, 25, 100);
+  hS.minRelayValue = constrain(hS.minRelayValue, 1, 100);
+
+  hS.setPointOn = constrain(hS.setPointOn, hS.minRelayValue, 100);
+  hS.maxValueOn = constrain(hS.maxValueOn, hS.minRelayValue, 100);
+  hS.minValueOn = constrain(hS.minValueOn, hS.minRelayValue, 100);
   hS.periodOn = constrain(hS.periodOn, 100, 300000);
 
-  hS.setPointOff = constrain(hS.setPointOff, 25, 100);
-  hS.maxValueOff = constrain(hS.maxValueOff, 25, 100);
-  hS.minValueOff = constrain(hS.minValueOff, 25, 100);
+  hS.setPointOff = constrain(hS.setPointOff, hS.minRelayValue, 100);
+  hS.maxValueOff = constrain(hS.maxValueOff, hS.minRelayValue, 100);
+  hS.minValueOff = constrain(hS.minValueOff, hS.minRelayValue, 100);
   hS.periodOff = constrain(hS.periodOff, 100, 300000);
 
   hS.modeOn = constrain(hS.modeOn, hitachiOff, hitachiRandom);
@@ -332,6 +335,23 @@ void Command_NormalizeHitachiSettings()
 int State_GetHitachiCurrentOutput()
 {
   return g_controlStatus.hitachiCurrentOutput;
+}
+
+int State_GetHitachiMinRelayValue()
+{
+  return hS.minRelayValue;
+}
+
+void Command_SetHitachiMinRelayValue(int value)
+{
+  hS.minRelayValue = constrain(value, 1, 100);
+  // Keep existing Hitachi values valid if the relay minimum changes.
+  Command_NormalizeHitachiSettings();
+}
+
+void Command_AdjustHitachiMinRelayValue(int delta)
+{
+  Command_SetHitachiMinRelayValue(hS.minRelayValue + delta);
 }
 
 // ------------------------------------------------------------

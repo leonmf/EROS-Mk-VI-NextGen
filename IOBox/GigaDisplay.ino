@@ -123,8 +123,10 @@ static lv_obj_t * g_manualScreen = NULL;
 static lv_obj_t * g_autoScreen = NULL;
 static lv_obj_t * g_autoSettingsScreen = NULL;
 static lv_obj_t * g_hitachiScreen = NULL;
+static lv_obj_t * g_hitachiRelayMinScreen = NULL;
 
 static lv_obj_t * g_previousScreenBeforeHitachi = NULL;
+static lv_obj_t * g_previousScreenBeforeRelayMin = NULL;
 
 // ------------------------------------------------------------
 // Idle screen widgets
@@ -198,6 +200,9 @@ static lv_obj_t * g_hitachiSetPointValueLabel = NULL;
 static lv_obj_t * g_hitachiMaxValueLabel = NULL;
 static lv_obj_t * g_hitachiMinValueLabel = NULL;
 static lv_obj_t * g_hitachiPeriodValueLabel = NULL;
+static lv_obj_t * g_hitachiRelayMinValueLabel = NULL;
+
+
 
 // ------------------------------------------------------------
 // Screen build/state flags
@@ -209,6 +214,7 @@ static bool g_manualScreenBuilt = false;
 static bool g_autoScreenBuilt = false;
 static bool g_autoSettingsScreenBuilt = false;
 static bool g_hitachiScreenBuilt = false;
+static bool g_hitachiRelayMinScreenBuilt = false;
 
 static bool g_hitachiEditingOnSettings = true;
 static bool g_hitachiUiRefreshing = false;
@@ -318,6 +324,7 @@ void GigaDisplay_Task();
 void GigaDisplay_ShowIdleScreen();
 void GigaDisplay_ShowManualScreen();
 void GigaDisplay_ShowHitachiScreen();
+void GigaDisplay_ShowHitachiRelayMinScreen();
 void GigaDisplay_ShowAutoScreen();
 void GigaDisplay_ShowAutoSettingsScreen();
 
@@ -326,13 +333,14 @@ void GigaDisplay_UpdateManualIndicators();
 static void GigaDisplay_CreateIdleScreen();
 static void GigaDisplay_CreateManualScreen();
 static void GigaDisplay_CreateHitachiScreen();
+static void GigaDisplay_CreateHitachiRelayMinScreen();
 static void GigaDisplay_CreateAutoScreen();
 static void GigaDisplay_CreateAutoSettingsScreen();
 static void GigaDisplay_DestroyAutoSettingsScreen();
 static void GigaDisplay_DestroyHitachiScreen();
 
-
 static void GigaDisplay_UpdateHitachiScreen();
+static void GigaDisplay_UpdateHitachiRelayMinScreen();
 static void GigaDisplay_UpdateAutoScreen();
 static void GigaDisplay_UpdateAutoSettingsScreen();
 
@@ -348,6 +356,12 @@ static void HitachiEditOffButton_Event(lv_event_t * e);
 static void HitachiModeButton_Event(lv_event_t * e);
 static void HitachiSlider_Event(lv_event_t * e);
 static void HitachiPeriodModeButton_Event(lv_event_t * e);
+static void HitachiRelayMinButton_Event(lv_event_t * e);
+static void HitachiRelayMinMinusButton_Event(lv_event_t * e);
+static void HitachiRelayMinPlusButton_Event(lv_event_t * e);
+static void HitachiRelayMinMinus5Button_Event(lv_event_t * e);
+static void HitachiRelayMinPlus5Button_Event(lv_event_t * e);
+static void HitachiRelayMinBackButton_Event(lv_event_t * e);
 
 static void SaveSettingsButton_Event(lv_event_t * e);
 static void LoadSettingsButton_Event(lv_event_t * e);
@@ -518,6 +532,7 @@ static void GigaDisplay_DestroyHitachiScreen()
   g_previousScreenBeforeHitachi = NULL;
 }
 
+
 // ------------------------------------------------------------
 // Idle screen
 // ------------------------------------------------------------
@@ -541,30 +556,19 @@ static void GigaDisplay_CreateIdleScreen()
   lv_label_set_text(title, "EROS Mk VI");
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
   lv_obj_set_style_text_font(title, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 28);
-  //SetLargeTitleStyle(title);
-  //lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 32);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 32);
 
-  //lv_obj_t * title = lv_label_create(g_idleScreen);
-  //lv_label_set_text(title, "EROS Mk VI");
-  //lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  //lv_obj_set_style_text_font(title, &lv_font_montserrat_28, LV_PART_MAIN);
-  //lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
+  const int mainButtonW = 210;
+  const int mainButtonH = 95;
+  const int mainY = 145;
 
-
-  const int buttonW = 220;
-  const int buttonH = 70;
-
-  const int leftX = 160;
-  const int rightX = 420;
-
-  const int row1Y = 105;
-  const int row2Y = 195;
-  const int row3Y = 285;
+  const int manualX = 75;
+  const int autoX = 295;
+  const int hitachiX = 515;
 
   lv_obj_t * manualBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(manualBtn, buttonW, buttonH);
-  lv_obj_set_pos(manualBtn, leftX, row1Y);
+  lv_obj_set_size(manualBtn, mainButtonW, mainButtonH);
+  lv_obj_set_pos(manualBtn, manualX, mainY);
   lv_obj_add_event_cb(manualBtn, ManualButton_Event, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t * manualLabel = lv_label_create(manualBtn);
@@ -573,8 +577,8 @@ static void GigaDisplay_CreateIdleScreen()
   lv_obj_center(manualLabel);
 
   lv_obj_t * autoBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(autoBtn, buttonW, buttonH);
-  lv_obj_set_pos(autoBtn, rightX, row1Y);
+  lv_obj_set_size(autoBtn, mainButtonW, mainButtonH);
+  lv_obj_set_pos(autoBtn, autoX, mainY);
   lv_obj_add_event_cb(autoBtn, AutoButton_Event, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t * autoLabel = lv_label_create(autoBtn);
@@ -583,8 +587,8 @@ static void GigaDisplay_CreateIdleScreen()
   lv_obj_center(autoLabel);
 
   lv_obj_t * hitachiBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(hitachiBtn, buttonW, buttonH);
-  lv_obj_set_pos(hitachiBtn, 290, row2Y);
+  lv_obj_set_size(hitachiBtn, mainButtonW, mainButtonH);
+  lv_obj_set_pos(hitachiBtn, hitachiX, mainY);
   lv_obj_add_event_cb(hitachiBtn, HitachiButton_Event, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t * hitachiLabel = lv_label_create(hitachiBtn);
@@ -592,11 +596,13 @@ static void GigaDisplay_CreateIdleScreen()
   lv_obj_set_style_text_font(hitachiLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
   lv_obj_center(hitachiLabel);
 
-
+  const int settingsButtonW = 220;
+  const int settingsButtonH = 65;
+  const int settingsY = 335;
 
   lv_obj_t * saveBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(saveBtn, buttonW, buttonH);
-  lv_obj_set_pos(saveBtn, leftX, row3Y);
+  lv_obj_set_size(saveBtn, settingsButtonW, settingsButtonH);
+  lv_obj_set_pos(saveBtn, 160, settingsY);
   lv_obj_add_event_cb(saveBtn, SaveSettingsButton_Event, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t * saveLabel = lv_label_create(saveBtn);
@@ -605,8 +611,8 @@ static void GigaDisplay_CreateIdleScreen()
   lv_obj_center(saveLabel);
 
   lv_obj_t * loadBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(loadBtn, buttonW, buttonH);
-  lv_obj_set_pos(loadBtn, rightX, row3Y);
+  lv_obj_set_size(loadBtn, settingsButtonW, settingsButtonH);
+  lv_obj_set_pos(loadBtn, 420, settingsY);
   lv_obj_add_event_cb(loadBtn, LoadSettingsButton_Event, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t * loadLabel = lv_label_create(loadBtn);
@@ -1510,7 +1516,7 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_obj_set_pos(setPointLabel, labelX, 185);
 
   g_hitachiSetPointSlider = lv_slider_create(g_hitachiScreen);
-  lv_slider_set_range(g_hitachiSetPointSlider, 25, 100);
+  lv_slider_set_range(g_hitachiSetPointSlider, State_GetHitachiMinRelayValue(), 100);
   lv_obj_set_size(g_hitachiSetPointSlider, sliderW, 20);
   lv_obj_set_pos(g_hitachiSetPointSlider, sliderX, 190);
   lv_obj_add_event_cb(g_hitachiSetPointSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
@@ -1528,7 +1534,7 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_obj_set_pos(maxLabel, labelX, 245);
 
   g_hitachiMaxSlider = lv_slider_create(g_hitachiScreen);
-  lv_slider_set_range(g_hitachiMaxSlider, 25, 100);
+  lv_slider_set_range(g_hitachiMaxSlider, State_GetHitachiMinRelayValue(), 100);
   lv_obj_set_size(g_hitachiMaxSlider, sliderW, 20);
   lv_obj_set_pos(g_hitachiMaxSlider, sliderX, 250);
   lv_obj_add_event_cb(g_hitachiMaxSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
@@ -1546,7 +1552,7 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_obj_set_pos(minLabel, labelX, 305);
 
   g_hitachiMinSlider = lv_slider_create(g_hitachiScreen);
-  lv_slider_set_range(g_hitachiMinSlider, 25, 100);
+  lv_slider_set_range(g_hitachiMinSlider, State_GetHitachiMinRelayValue(), 100);
   lv_obj_set_size(g_hitachiMinSlider, sliderW, 20);
   lv_obj_set_pos(g_hitachiMinSlider, sliderX, 310);
   lv_obj_add_event_cb(g_hitachiMinSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
@@ -1589,7 +1595,17 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_label_set_text(g_hitachiDimmerEnableLabel, "Dimmer: OFF");
   lv_obj_set_style_text_color(g_hitachiDimmerEnableLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
   lv_obj_set_style_text_font(g_hitachiDimmerEnableLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(g_hitachiDimmerEnableLabel, LV_ALIGN_BOTTOM_MID, -20, -38);
+  lv_obj_align(g_hitachiDimmerEnableLabel, LV_ALIGN_BOTTOM_MID, -115, -38);
+
+  lv_obj_t * relayMinBtn = lv_btn_create(g_hitachiScreen);
+  lv_obj_set_size(relayMinBtn, 130, 50);
+  lv_obj_align(relayMinBtn, LV_ALIGN_BOTTOM_RIGHT, -175, -25);
+  lv_obj_add_event_cb(relayMinBtn, HitachiRelayMinButton_Event, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t * relayMinLabel = lv_label_create(relayMinBtn);
+  lv_label_set_text(relayMinLabel, "Relay Min");
+  lv_obj_set_style_text_font(relayMinLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
+  lv_obj_center(relayMinLabel);
 
   lv_obj_t * backBtn = lv_btn_create(g_hitachiScreen);
   lv_obj_set_size(backBtn, 130, 50);
@@ -1629,9 +1645,15 @@ static void GigaDisplay_UpdateHitachiScreen()
 
   g_hitachiUiRefreshing = true;
 
-  int setPoint = constrain(State_GetHitachiSetPoint(g_hitachiEditingOnSettings), 25, 100);
-  int maxValue = constrain(State_GetHitachiMaxValue(g_hitachiEditingOnSettings), 25, 100);
-  int minValue = constrain(State_GetHitachiMinValue(g_hitachiEditingOnSettings), 25, 100);
+  int minRelayValue = State_GetHitachiMinRelayValue();
+
+  int setPoint = constrain(State_GetHitachiSetPoint(g_hitachiEditingOnSettings), minRelayValue, 100);
+  int maxValue = constrain(State_GetHitachiMaxValue(g_hitachiEditingOnSettings), minRelayValue, 100);
+  int minValue = constrain(State_GetHitachiMinValue(g_hitachiEditingOnSettings), minRelayValue, 100);
+
+  lv_slider_set_range(g_hitachiSetPointSlider, minRelayValue, 100);
+  lv_slider_set_range(g_hitachiMaxSlider, minRelayValue, 100);
+  lv_slider_set_range(g_hitachiMinSlider, minRelayValue, 100);
 
   Command_SetHitachiSetPoint(g_hitachiEditingOnSettings, setPoint);
   Command_SetHitachiMaxValue(g_hitachiEditingOnSettings, maxValue);
@@ -1686,6 +1708,113 @@ static void GigaDisplay_UpdateHitachiScreen()
   lv_label_set_text(g_hitachiPeriodValueLabel, buffer);
 
   g_hitachiUiRefreshing = false;
+}
+
+// ------------------------------------------------------------
+// Hitachi Min Relay screen
+// ------------------------------------------------------------
+static void GigaDisplay_CreateHitachiRelayMinScreen()
+{
+  g_hitachiRelayMinScreen = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(g_hitachiRelayMinScreen, lv_color_hex(0x000000), LV_PART_MAIN);
+  lv_obj_clear_flag(g_hitachiRelayMinScreen, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t * title = lv_label_create(g_hitachiRelayMinScreen);
+  lv_label_set_text(title, "Dimmer Relay Minimum");
+  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+  lv_obj_set_style_text_font(title, LV_FONT_DEFAULT, LV_PART_MAIN);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 30);
+
+  lv_obj_t * note = lv_label_create(g_hitachiRelayMinScreen);
+  lv_label_set_text(note, "Relay turns ON when Hitachi output is at or above this value.");
+  lv_obj_set_style_text_color(note, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+  lv_obj_set_style_text_font(note, LV_FONT_DEFAULT, LV_PART_MAIN);
+  lv_obj_align(note, LV_ALIGN_TOP_MID, 0, 80);
+
+  g_hitachiRelayMinValueLabel = lv_label_create(g_hitachiRelayMinScreen);
+  lv_label_set_text(g_hitachiRelayMinValueLabel, "Min: 25%");
+  lv_obj_set_style_text_color(g_hitachiRelayMinValueLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+  lv_obj_set_style_text_font(g_hitachiRelayMinValueLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
+  lv_obj_align(g_hitachiRelayMinValueLabel, LV_ALIGN_TOP_MID, 0, 145);
+
+  const int buttonW = 120;
+  const int buttonH = 60;
+  const int y1 = 210;
+
+  lv_obj_t * minus5Btn = lv_btn_create(g_hitachiRelayMinScreen);
+  lv_obj_set_size(minus5Btn, buttonW, buttonH);
+  lv_obj_set_pos(minus5Btn, 180, y1);
+  lv_obj_add_event_cb(minus5Btn, HitachiRelayMinMinus5Button_Event, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t * minus5Label = lv_label_create(minus5Btn);
+  lv_label_set_text(minus5Label, "-5");
+  lv_obj_center(minus5Label);
+
+  lv_obj_t * minusBtn = lv_btn_create(g_hitachiRelayMinScreen);
+  lv_obj_set_size(minusBtn, buttonW, buttonH);
+  lv_obj_set_pos(minusBtn, 320, y1);
+  lv_obj_add_event_cb(minusBtn, HitachiRelayMinMinusButton_Event, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t * minusLabel = lv_label_create(minusBtn);
+  lv_label_set_text(minusLabel, "-1");
+  lv_obj_center(minusLabel);
+
+  lv_obj_t * plusBtn = lv_btn_create(g_hitachiRelayMinScreen);
+  lv_obj_set_size(plusBtn, buttonW, buttonH);
+  lv_obj_set_pos(plusBtn, 460, y1);
+  lv_obj_add_event_cb(plusBtn, HitachiRelayMinPlusButton_Event, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t * plusLabel = lv_label_create(plusBtn);
+  lv_label_set_text(plusLabel, "+1");
+  lv_obj_center(plusLabel);
+
+  lv_obj_t * plus5Btn = lv_btn_create(g_hitachiRelayMinScreen);
+  lv_obj_set_size(plus5Btn, buttonW, buttonH);
+  lv_obj_set_pos(plus5Btn, 600, y1);
+  lv_obj_add_event_cb(plus5Btn, HitachiRelayMinPlus5Button_Event, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t * plus5Label = lv_label_create(plus5Btn);
+  lv_label_set_text(plus5Label, "+5");
+  lv_obj_center(plus5Label);
+
+  lv_obj_t * backBtn = lv_btn_create(g_hitachiRelayMinScreen);
+  lv_obj_set_size(backBtn, 130, 50);
+  lv_obj_align(backBtn, LV_ALIGN_BOTTOM_RIGHT, -30, -25);
+  lv_obj_add_event_cb(backBtn, HitachiRelayMinBackButton_Event, LV_EVENT_CLICKED, NULL);
+
+  lv_obj_t * backLabel = lv_label_create(backBtn);
+  lv_label_set_text(backLabel, "Back");
+  lv_obj_center(backLabel);
+
+  g_hitachiRelayMinScreenBuilt = true;
+}
+
+void GigaDisplay_ShowHitachiRelayMinScreen()
+{
+  if (!g_displayInitialized) {
+    GigaDisplay_Setup();
+    return;
+  }
+
+  g_previousScreenBeforeRelayMin = lv_scr_act();
+
+  if (!g_hitachiRelayMinScreenBuilt) {
+    GigaDisplay_CreateHitachiRelayMinScreen();
+  }
+
+  GigaDisplay_UpdateHitachiRelayMinScreen();
+  lv_scr_load(g_hitachiRelayMinScreen);
+}
+
+static void GigaDisplay_UpdateHitachiRelayMinScreen()
+{
+  if (!g_hitachiRelayMinScreenBuilt) {
+    return;
+  }
+
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "Min: %d%%", State_GetHitachiMinRelayValue());
+  lv_label_set_text(g_hitachiRelayMinValueLabel, buffer);
 }
 
 // ------------------------------------------------------------
@@ -1878,19 +2007,19 @@ static void HitachiSlider_Event(lv_event_t * e)
   if (slider == g_hitachiSetPointSlider) {
     Command_SetHitachiSetPoint(
       g_hitachiEditingOnSettings,
-      constrain(lv_slider_get_value(slider), 25, 100)
+      constrain(lv_slider_get_value(slider), State_GetHitachiMinRelayValue(), 100)
     );
   }
   else if (slider == g_hitachiMaxSlider) {
     Command_SetHitachiMaxValue(
       g_hitachiEditingOnSettings,
-      constrain(lv_slider_get_value(slider), 25, 100)
+      constrain(lv_slider_get_value(slider), State_GetHitachiMinRelayValue(), 100)
     );
   }
   else if (slider == g_hitachiMinSlider) {
     Command_SetHitachiMinValue(
       g_hitachiEditingOnSettings,
-      constrain(lv_slider_get_value(slider), 25, 100)
+      constrain(lv_slider_get_value(slider), State_GetHitachiMinRelayValue(), 100)
     );
   }
   else if (slider == g_hitachiPeriodSlider) {
@@ -1909,6 +2038,46 @@ static void HitachiPeriodModeButton_Event(lv_event_t * e)
 {
   Command_ToggleHitachiPeriodPrecise(g_hitachiEditingOnSettings);
   GigaDisplay_UpdateHitachiScreen();
+}
+
+static void HitachiRelayMinButton_Event(lv_event_t * e)
+{
+  GigaDisplay_ShowHitachiRelayMinScreen();
+}
+
+static void HitachiRelayMinMinusButton_Event(lv_event_t * e)
+{
+  Command_AdjustHitachiMinRelayValue(-1);
+  GigaDisplay_UpdateHitachiRelayMinScreen();
+}
+
+static void HitachiRelayMinPlusButton_Event(lv_event_t * e)
+{
+  Command_AdjustHitachiMinRelayValue(1);
+  GigaDisplay_UpdateHitachiRelayMinScreen();
+}
+
+static void HitachiRelayMinMinus5Button_Event(lv_event_t * e)
+{
+  Command_AdjustHitachiMinRelayValue(-5);
+  GigaDisplay_UpdateHitachiRelayMinScreen();
+}
+
+static void HitachiRelayMinPlus5Button_Event(lv_event_t * e)
+{
+  Command_AdjustHitachiMinRelayValue(5);
+  GigaDisplay_UpdateHitachiRelayMinScreen();
+}
+
+static void HitachiRelayMinBackButton_Event(lv_event_t * e)
+{
+  if (g_previousScreenBeforeRelayMin != NULL) {
+    GigaDisplay_UpdateHitachiScreen();
+    lv_scr_load(g_previousScreenBeforeRelayMin);
+  }
+  else {
+    GigaDisplay_ShowHitachiScreen();
+  }
 }
 
 static void SaveSettingsButton_Event(lv_event_t * e)

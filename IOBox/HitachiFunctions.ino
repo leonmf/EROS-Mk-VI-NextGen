@@ -7,7 +7,7 @@
     - hS.sine has 255 elements, so valid indexes are 0 through 254.
     - Period is protected against zero to avoid divide-by-zero.
     - WriteHitachiOutput() uses the working GigaDimmer 0-100% behavior.
-    - Dimmer Relay relay output now follows Hitachi output automatically:
+    - Dimmer Relay relay output follows Hitachi output automatically:
         relay ON  when hS.currentOutput >= minRelay
         relay OFF when hS.currentOutput <  minRelay
     OUT_HITACHI_VIRTUAL is the auto-mode logical command that selects Hitachi ON or OFF settings.
@@ -34,10 +34,19 @@ void Hitachi(int mode, int setPoint, int period, int maxVal, int minVal, int min
   int sineIndex = 0;
   bool trigger = false;
 
+  minRelay = constrain(minRelay, 0, 100);
+
   setPoint = constrain(setPoint, 0, 100);
   maxVal = constrain(maxVal, 0, 100);
   minVal = constrain(minVal, 0, 100);
-  minRelay = constrain(minRelay, 0, 100);
+
+  // For all active dimmer modes, never allow commanded dimmer percent
+  // below the relay-safe minimum.
+  if (mode != hitachiOff) {
+    setPoint = constrain(setPoint, minRelay, 100);
+    maxVal = constrain(maxVal, minRelay, 100);
+    minVal = constrain(minVal, minRelay, 100);
+  }
 
   if (maxVal < minVal) {
     int temp = maxVal;
@@ -57,7 +66,8 @@ void Hitachi(int mode, int setPoint, int period, int maxVal, int minVal, int min
     lastTriggerTime = ct;
     trigger = true;
     dt = 0;
-  } else {
+  }
+  else {
     trigger = false;
   }
 
@@ -74,8 +84,11 @@ void Hitachi(int mode, int setPoint, int period, int maxVal, int minVal, int min
       break;
 
     case hitachiValue:
-      currentVal = map(setPoint, 0, 100, 0, 255);
-      hS.currentOutput = setPoint;
+      stageVal = constrain(setPoint, minRelay, 100);
+
+      currentVal = map(stageVal, 0, 100, 0, 255);
+      hS.currentOutput = stageVal;
+
       WriteHitachiOutput(currentVal);
       UpdateHitachiRelayOutput(hS.currentOutput, minRelay);
       break;
@@ -84,13 +97,18 @@ void Hitachi(int mode, int setPoint, int period, int maxVal, int minVal, int min
       if (trigger == true) {
         if (high == true) {
           high = false;
-          currentVal = map(minVal, 0, 100, 0, 255);
-        } else {
+          stageVal = minVal;
+        }
+        else {
           high = true;
-          currentVal = map(maxVal, 0, 100, 0, 255);
+          stageVal = maxVal;
         }
 
-        hS.currentOutput = (int)(((float)currentVal / 255.0) * 100);
+        stageVal = constrain(stageVal, minRelay, 100);
+
+        currentVal = map(stageVal, 0, 100, 0, 255);
+        hS.currentOutput = stageVal;
+
         WriteHitachiOutput(currentVal);
       }
 
@@ -102,10 +120,10 @@ void Hitachi(int mode, int setPoint, int period, int maxVal, int minVal, int min
       sineIndex = constrain((int)(x * 254.0), 0, 254);
 
       stageVal = map(hS.sine[sineIndex], 0, 255, minVal, maxVal);
-      stageVal = constrain(stageVal, 0, 100);
+      stageVal = constrain(stageVal, minRelay, 100);
 
       currentVal = map(stageVal, 0, 100, 0, 255);
-      hS.currentOutput = (int)(((float)currentVal / 255.0) * 100);
+      hS.currentOutput = stageVal;
 
       WriteHitachiOutput(currentVal);
       UpdateHitachiRelayOutput(hS.currentOutput, minRelay);
@@ -113,10 +131,10 @@ void Hitachi(int mode, int setPoint, int period, int maxVal, int minVal, int min
 
     case hitachiSawTooth:
       stageVal = map((int)(255.0 - (x * 255.0)), 0, 255, minVal, maxVal);
-      stageVal = constrain(stageVal, 0, 100);
+      stageVal = constrain(stageVal, minRelay, 100);
 
       currentVal = map(stageVal, 0, 100, 0, 255);
-      hS.currentOutput = (int)(((float)currentVal / 255.0) * 100);
+      hS.currentOutput = stageVal;
 
       WriteHitachiOutput(currentVal);
       UpdateHitachiRelayOutput(hS.currentOutput, minRelay);
@@ -125,14 +143,15 @@ void Hitachi(int mode, int setPoint, int period, int maxVal, int minVal, int min
     case hitachiTriangle:
       if (x < 0.5) {
         stageVal = map((int)(x * 512.0), 0, 256, minVal, maxVal);
-      } else {
+      }
+      else {
         stageVal = map((int)(512.0 - (x * 512.0)), 0, 256, minVal, maxVal);
       }
 
-      stageVal = constrain(stageVal, 0, 100);
+      stageVal = constrain(stageVal, minRelay, 100);
 
       currentVal = map(stageVal, 0, 100, 0, 255);
-      hS.currentOutput = (int)(((float)currentVal / 255.0) * 100);
+      hS.currentOutput = stageVal;
 
       WriteHitachiOutput(currentVal);
       UpdateHitachiRelayOutput(hS.currentOutput, minRelay);
@@ -141,10 +160,10 @@ void Hitachi(int mode, int setPoint, int period, int maxVal, int minVal, int min
     case hitachiRandom:
       if (trigger) {
         stageVal = random(minVal, maxVal + 1);
-        stageVal = constrain(stageVal, 0, 100);
+        stageVal = constrain(stageVal, minRelay, 100);
 
         currentVal = map(stageVal, 0, 100, 0, 255);
-        hS.currentOutput = (int)(((float)currentVal / 255.0) * 100);
+        hS.currentOutput = stageVal;
 
         WriteHitachiOutput(currentVal);
       }
