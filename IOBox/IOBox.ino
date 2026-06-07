@@ -143,6 +143,7 @@ int State_GetHitachiMinValue(bool onSettings);
 void Command_SetHitachiMinValue(bool onSettings, int value);
 int State_GetHitachiPeriod(bool onSettings);
 void Command_SetHitachiPeriod(bool onSettings, int periodMs);
+void Command_NormalizeHitachiSettings();
 int State_GetHitachiCurrentOutput();
 bool State_GetHitachiVirtualRequest();
 bool State_GetHitachiVirtualOutput();

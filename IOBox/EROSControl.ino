@@ -74,6 +74,10 @@ void Control_Setup(void)
   // Load settings from flash memory
   Settings_LoadAllOrDefaults();
 
+  // Normalize loaded/default Hitachi values before any mode uses them.
+  // Do not depend on the Hitachi UI screen to do this.
+  Command_NormalizeHitachiSettings();
+
   Command_ForceFixedAutoOutputModes();
 
   // Seed the UI/control status snapshot before the first display update.

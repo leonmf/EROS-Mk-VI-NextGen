@@ -285,6 +285,38 @@ void Command_SetHitachiPeriod(bool onSettings, int periodMs)
   *State_HitachiPeriodPtr(onSettings) = constrain(periodMs, 100, 300000);
 }
 
+void Command_NormalizeHitachiSettings()
+{
+  hS.modeOff = constrain(hS.modeOff, hitachiOff, hitachiRandom);
+  hS.modeOn = constrain(hS.modeOn, hitachiOff, hitachiRandom);
+
+  hS.setPointOff = constrain(hS.setPointOff, 25, 100);
+  hS.setPointOn = constrain(hS.setPointOn, 25, 100);
+
+  hS.periodOff = constrain(hS.periodOff, 100, 300000);
+  hS.periodOn = constrain(hS.periodOn, 100, 300000);
+
+  hS.maxValueOff = constrain(hS.maxValueOff, 25, 100);
+  hS.maxValueOn = constrain(hS.maxValueOn, 25, 100);
+
+  hS.minValueOff = constrain(hS.minValueOff, 25, 100);
+  hS.minValueOn = constrain(hS.minValueOn, 25, 100);
+  
+  hS.minRelayValue = constrain(hS.minRelayValue, 0, 100);
+
+  if (hS.maxValueOff < hS.minValueOff) {
+    int temp = hS.maxValueOff;
+    hS.maxValueOff = hS.minValueOff;
+    hS.minValueOff = temp;
+  }
+
+  if (hS.maxValueOn < hS.minValueOn) {
+    int temp = hS.maxValueOn;
+    hS.maxValueOn = hS.minValueOn;
+    hS.minValueOn = temp;
+  }
+}
+
 int State_GetHitachiCurrentOutput()
 {
   return g_controlStatus.hitachiCurrentOutput;

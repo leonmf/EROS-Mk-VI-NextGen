@@ -1403,11 +1403,10 @@ static int Hitachi_PeriodSliderToMs(int sliderValue)
 
 static int Hitachi_PeriodMsToSlider(int periodMs)
 {
-  int periodMaxMs = g_hitachiPeriodPreciseMode ? 2000 : 300000;
-
-  periodMs = constrain(periodMs, 100, periodMaxMs);
+  periodMs = constrain(periodMs, 100, 300000);
 
   if (g_hitachiPeriodPreciseMode) {
+    periodMs = constrain(periodMs, 100, 2000);
     return map(periodMs, 100, 2000, 0, 100);
   }
 
@@ -1614,6 +1613,9 @@ void GigaDisplay_ShowHitachiScreen()
 
   g_previousScreenBeforeHitachi = lv_scr_act();
 
+  int periodMs = State_GetHitachiPeriod(g_hitachiEditingOnSettings);
+  g_hitachiPeriodPreciseMode = (periodMs <= 2000);
+
   if (!g_hitachiScreenBuilt) {
     GigaDisplay_CreateHitachiScreen();
   }
@@ -1638,9 +1640,12 @@ static void GigaDisplay_UpdateHitachiScreen()
   Command_SetHitachiMaxValue(g_hitachiEditingOnSettings, maxValue);
   Command_SetHitachiMinValue(g_hitachiEditingOnSettings, minValue);
 
-  int periodMaxMs = g_hitachiPeriodPreciseMode ? 2000 : 300000;
-  int periodMs = constrain(State_GetHitachiPeriod(g_hitachiEditingOnSettings), 100, periodMaxMs);
-  Command_SetHitachiPeriod(g_hitachiEditingOnSettings, periodMs);
+  //int periodMaxMs = g_hitachiPeriodPreciseMode ? 2000 : 300000;
+  //int periodMs = constrain(State_GetHitachiPeriod(g_hitachiEditingOnSettings), 100, periodMaxMs);
+  //Command_SetHitachiPeriod(g_hitachiEditingOnSettings, periodMs);
+
+  int periodMs = State_GetHitachiPeriod(g_hitachiEditingOnSettings);
+  periodMs = constrain(periodMs, 100, 300000);
 
   int mode = State_GetHitachiMode(g_hitachiEditingOnSettings);
 
@@ -1908,13 +1913,6 @@ static void HitachiPeriodModeButton_Event(lv_event_t * e)
 {
   g_hitachiPeriodPreciseMode = !g_hitachiPeriodPreciseMode;
 
-  int periodMaxMs = g_hitachiPeriodPreciseMode ? 2000 : 300000;
-
-  int periodMs = State_GetHitachiPeriod(g_hitachiEditingOnSettings);
-  periodMs = constrain(periodMs, 100, periodMaxMs);
-
-  Command_SetHitachiPeriod(g_hitachiEditingOnSettings, periodMs);
-
   GigaDisplay_UpdateHitachiScreen();
 }
 
@@ -1935,6 +1933,8 @@ static void LoadSettingsButton_Event(lv_event_t * e)
   bool ok = Settings_LoadAll();
 
   if (ok) {
+    Command_NormalizeHitachiSettings();
+    State_RefreshControlStatus();
     SetIdleStatusText("Settings loaded");
   }
   else {
