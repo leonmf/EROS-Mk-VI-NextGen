@@ -126,7 +126,7 @@ void Command_ToggleLock()
 bool State_GetDimmerEnabledRequest()
 {
   // Dimmer relay is automatic. Return actual relay state.
-  return OutValues[OUT_DIMMER_ENABLE];
+  return State_GetOutput(OUT_DIMMER_ENABLE);
 }
 
 void Command_SetDimmerEnabledRequest(bool enabled)
@@ -237,6 +237,30 @@ void Command_SetHitachiPeriod(bool onSettings, int periodMs)
 int State_GetHitachiCurrentOutput()
 {
   return hS.currentOutput;
+}
+
+// ------------------------------------------------------------
+// Hitachi virtual command helpers
+// ------------------------------------------------------------
+
+bool State_GetHitachiVirtualRequest()
+{
+  return State_GetManualOutputRequest(OUT_HITACHI_VIRTUAL);
+}
+
+bool State_GetHitachiVirtualOutput()
+{
+  return State_GetOutput(OUT_HITACHI_VIRTUAL);
+}
+
+void Command_SetHitachiVirtualRequest(bool enabled)
+{
+  Command_SetManualOutput(OUT_HITACHI_VIRTUAL, enabled);
+}
+
+void Command_ToggleHitachiVirtualRequest()
+{
+  Command_ToggleManualOutput(OUT_HITACHI_VIRTUAL);
 }
 
 // ------------------------------------------------------------

@@ -347,7 +347,6 @@ static void HitachiEditOnButton_Event(lv_event_t * e);
 static void HitachiEditOffButton_Event(lv_event_t * e);
 static void HitachiModeButton_Event(lv_event_t * e);
 static void HitachiSlider_Event(lv_event_t * e);
-static void HitachiDimmerEnableButton_Event(lv_event_t * e);
 static void HitachiPeriodModeButton_Event(lv_event_t * e);
 
 static void SaveSettingsButton_Event(lv_event_t * e);
@@ -1660,7 +1659,7 @@ static void GigaDisplay_UpdateHitachiScreen()
 
   lv_label_set_text(
     g_hitachiDimmerEnableLabel,
-    State_GetOutput(OUT_DIMMER_ENABLE) ? "Dimmer: ON" : "Dimmer: OFF"
+    State_GetDimmerEnabledRequest() ? "Dimmer: ON" : "Dimmer: OFF"
   );
 
   lv_label_set_text(
@@ -1747,10 +1746,12 @@ static void OutputToggle_Event(lv_event_t * e)
   if (outputIdx == OUT_LOCK_1) {
     Command_ToggleLock();
   }
+  else if (outputIdx == OUT_HITACHI_VIRTUAL) {
+    Command_ToggleHitachiVirtualRequest();
+  }
   else {
     Command_ToggleManualOutput(outputIdx);
   }
-
   GigaDisplay_UpdateManualIndicators();
 }
 
@@ -1900,12 +1901,6 @@ static void HitachiSlider_Event(lv_event_t * e)
     );
   }
 
-  GigaDisplay_UpdateHitachiScreen();
-}
-
-static void HitachiDimmerEnableButton_Event(lv_event_t * e)
-{
-  Command_ToggleDimmerEnabledRequest();
   GigaDisplay_UpdateHitachiScreen();
 }
 

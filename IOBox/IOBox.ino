@@ -144,6 +144,10 @@ void Command_SetHitachiMinValue(bool onSettings, int value);
 int State_GetHitachiPeriod(bool onSettings);
 void Command_SetHitachiPeriod(bool onSettings, int periodMs);
 int State_GetHitachiCurrentOutput();
+bool State_GetHitachiVirtualRequest();
+bool State_GetHitachiVirtualOutput();
+void Command_SetHitachiVirtualRequest(bool enabled);
+void Command_ToggleHitachiVirtualRequest();
 
 //Settings save load prototypes
 bool Settings_SaveAll();
