@@ -380,6 +380,131 @@ static void AutoOutputInputButton_Event(lv_event_t * e);
 // ------------------------------------------------------------
 // Utility helpers
 // ------------------------------------------------------------
+static lv_obj_t * CreateWhiteLabel(
+  lv_obj_t * parent,
+  const char * text,
+  int x,
+  int y
+);
+
+static lv_obj_t * CreateCenteredWhiteLabel(
+  lv_obj_t * parent,
+  const char * text,
+  lv_align_t align,
+  int xOffset,
+  int yOffset
+);
+
+static lv_obj_t * CreateButton(
+  lv_obj_t * parent,
+  const char * text,
+  int x,
+  int y,
+  int w,
+  int h,
+  lv_event_cb_t eventCb,
+  void * userData
+);
+
+static lv_obj_t * CreateAlignedButton(
+  lv_obj_t * parent,
+  const char * text,
+  lv_align_t align,
+  int xOffset,
+  int yOffset,
+  int w,
+  int h,
+  lv_event_cb_t eventCb,
+  void * userData
+);
+
+static lv_obj_t * CreateWhiteLabel(
+  lv_obj_t * parent,
+  const char * text,
+  int x,
+  int y
+)
+{
+  lv_obj_t * label = lv_label_create(parent);
+  lv_label_set_text(label, text);
+  lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+  lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, LV_PART_MAIN);
+  lv_obj_set_pos(label, x, y);
+
+  return label;
+}
+
+static lv_obj_t * CreateCenteredWhiteLabel(
+  lv_obj_t * parent,
+  const char * text,
+  lv_align_t align,
+  int xOffset,
+  int yOffset
+)
+{
+  lv_obj_t * label = lv_label_create(parent);
+  lv_label_set_text(label, text);
+  lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+  lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, LV_PART_MAIN);
+  lv_obj_align(label, align, xOffset, yOffset);
+
+  return label;
+}
+
+static lv_obj_t * CreateButton(
+  lv_obj_t * parent,
+  const char * text,
+  int x,
+  int y,
+  int w,
+  int h,
+  lv_event_cb_t eventCb,
+  void * userData
+)
+{
+  lv_obj_t * btn = lv_btn_create(parent);
+  lv_obj_set_size(btn, w, h);
+  lv_obj_set_pos(btn, x, y);
+
+  if (eventCb != NULL) {
+    lv_obj_add_event_cb(btn, eventCb, LV_EVENT_CLICKED, userData);
+  }
+
+  lv_obj_t * label = lv_label_create(btn);
+  lv_label_set_text(label, text);
+  lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, LV_PART_MAIN);
+  lv_obj_center(label);
+
+  return btn;
+}
+
+static lv_obj_t * CreateAlignedButton(
+  lv_obj_t * parent,
+  const char * text,
+  lv_align_t align,
+  int xOffset,
+  int yOffset,
+  int w,
+  int h,
+  lv_event_cb_t eventCb,
+  void * userData
+)
+{
+  lv_obj_t * btn = lv_btn_create(parent);
+  lv_obj_set_size(btn, w, h);
+  lv_obj_align(btn, align, xOffset, yOffset);
+
+  if (eventCb != NULL) {
+    lv_obj_add_event_cb(btn, eventCb, LV_EVENT_CLICKED, userData);
+  }
+
+  lv_obj_t * label = lv_label_create(btn);
+  lv_label_set_text(label, text);
+  lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, LV_PART_MAIN);
+  lv_obj_center(label);
+
+  return btn;
+}
 
 static void SetIndicatorState(lv_obj_t * indicator, bool state)
 {
@@ -552,11 +677,7 @@ static void GigaDisplay_CreateIdleScreen()
   lv_obj_set_style_radius(border, 8, LV_PART_MAIN);
   lv_obj_clear_flag(border, LV_OBJ_FLAG_SCROLLABLE);
 
-  lv_obj_t * title = lv_label_create(g_idleScreen);
-  lv_label_set_text(title, "EROS Mk VI");
-  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(title, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 32);
+  CreateCenteredWhiteLabel(g_idleScreen, "EROS Mk VI", LV_ALIGN_TOP_MID, 0, 28);
 
   const int mainButtonW = 210;
   const int mainButtonH = 95;
@@ -566,65 +687,18 @@ static void GigaDisplay_CreateIdleScreen()
   const int autoX = 295;
   const int hitachiX = 515;
 
-  lv_obj_t * manualBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(manualBtn, mainButtonW, mainButtonH);
-  lv_obj_set_pos(manualBtn, manualX, mainY);
-  lv_obj_add_event_cb(manualBtn, ManualButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * manualLabel = lv_label_create(manualBtn);
-  lv_label_set_text(manualLabel, "Manual");
-  lv_obj_set_style_text_font(manualLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(manualLabel);
-
-  lv_obj_t * autoBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(autoBtn, mainButtonW, mainButtonH);
-  lv_obj_set_pos(autoBtn, autoX, mainY);
-  lv_obj_add_event_cb(autoBtn, AutoButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * autoLabel = lv_label_create(autoBtn);
-  lv_label_set_text(autoLabel, "Auto");
-  lv_obj_set_style_text_font(autoLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(autoLabel);
-
-  lv_obj_t * hitachiBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(hitachiBtn, mainButtonW, mainButtonH);
-  lv_obj_set_pos(hitachiBtn, hitachiX, mainY);
-  lv_obj_add_event_cb(hitachiBtn, HitachiButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * hitachiLabel = lv_label_create(hitachiBtn);
-  lv_label_set_text(hitachiLabel, "Hitachi");
-  lv_obj_set_style_text_font(hitachiLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(hitachiLabel);
+  CreateButton(g_idleScreen, "Manual", manualX, mainY, mainButtonW, mainButtonH, ManualButton_Event, NULL);
+  CreateButton(g_idleScreen, "Auto", autoX, mainY, mainButtonW, mainButtonH, AutoButton_Event, NULL);
+  CreateButton(g_idleScreen, "Hitachi", hitachiX, mainY, mainButtonW, mainButtonH, HitachiButton_Event, NULL);
 
   const int settingsButtonW = 220;
   const int settingsButtonH = 65;
   const int settingsY = 335;
 
-  lv_obj_t * saveBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(saveBtn, settingsButtonW, settingsButtonH);
-  lv_obj_set_pos(saveBtn, 160, settingsY);
-  lv_obj_add_event_cb(saveBtn, SaveSettingsButton_Event, LV_EVENT_CLICKED, NULL);
+  CreateButton(g_idleScreen, "Save Settings", 160, settingsY, settingsButtonW, settingsButtonH, SaveSettingsButton_Event, NULL);
+  CreateButton(g_idleScreen, "Load Settings", 420, settingsY, settingsButtonW, settingsButtonH, LoadSettingsButton_Event, NULL);
 
-  lv_obj_t * saveLabel = lv_label_create(saveBtn);
-  lv_label_set_text(saveLabel, "Save Settings");
-  lv_obj_set_style_text_font(saveLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(saveLabel);
-
-  lv_obj_t * loadBtn = lv_btn_create(g_idleScreen);
-  lv_obj_set_size(loadBtn, settingsButtonW, settingsButtonH);
-  lv_obj_set_pos(loadBtn, 420, settingsY);
-  lv_obj_add_event_cb(loadBtn, LoadSettingsButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * loadLabel = lv_label_create(loadBtn);
-  lv_label_set_text(loadLabel, "Load Settings");
-  lv_obj_set_style_text_font(loadLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(loadLabel);
-
-  g_idleStatusLabel = lv_label_create(g_idleScreen);
-  lv_label_set_text(g_idleStatusLabel, "Settings ready");
-  lv_obj_set_style_text_color(g_idleStatusLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_idleStatusLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(g_idleStatusLabel, LV_ALIGN_BOTTOM_MID, 0, -32);
+  g_idleStatusLabel = CreateCenteredWhiteLabel(g_idleScreen, "Settings ready", LV_ALIGN_BOTTOM_MID, 0, -32);
 }
 
 void GigaDisplay_ShowIdleScreen()
@@ -643,7 +717,6 @@ void GigaDisplay_ShowIdleScreen()
 // ------------------------------------------------------------
 // Manual screen
 // ------------------------------------------------------------
-
 static void GigaDisplay_CreateManualScreen()
 {
   g_manualScreen = lv_obj_create(NULL);
@@ -653,29 +726,17 @@ static void GigaDisplay_CreateManualScreen()
   // ------------------------------------------------------------
   // Current Hitachi output label
   // ------------------------------------------------------------
-  g_manualCurrentOutputLabel = lv_label_create(g_manualScreen);
-  lv_label_set_text(g_manualCurrentOutputLabel, "Output: 0%");
-  lv_obj_set_style_text_color(g_manualCurrentOutputLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_manualCurrentOutputLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(g_manualCurrentOutputLabel, LV_ALIGN_TOP_RIGHT, -30, 14);
+  g_manualCurrentOutputLabel = CreateCenteredWhiteLabel(g_manualScreen, "Output: 0%", LV_ALIGN_TOP_RIGHT, -30, 14);
 
   // ------------------------------------------------------------
   // Dedicated inputs
   // ------------------------------------------------------------
-  lv_obj_t * inputHeader = lv_label_create(g_manualScreen);
-  lv_label_set_text(inputHeader, "Inputs");
-  lv_obj_set_style_text_color(inputHeader, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(inputHeader, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(inputHeader, 40, 45);
+  CreateWhiteLabel(g_manualScreen, "Inputs", 40, 45);
 
   for (int i = 0; i < InSize; i++) {
     int y = 75 + (i * 42);
 
-    lv_obj_t * name = lv_label_create(g_manualScreen);
-    lv_label_set_text(name, INPUT_NAMES[i]);
-    lv_obj_set_style_text_color(name, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(name, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(name, 40, y + 7);
+    CreateWhiteLabel(g_manualScreen, INPUT_NAMES[i], 40, y + 7);
 
     g_inputIndicators[i] = lv_obj_create(g_manualScreen);
     lv_obj_set_size(g_inputIndicators[i], 28, 28);
@@ -685,30 +746,18 @@ static void GigaDisplay_CreateManualScreen()
     lv_obj_set_style_border_color(g_inputIndicators[i], lv_color_hex(0xA0A0A0), LV_PART_MAIN);
     lv_obj_clear_flag(g_inputIndicators[i], LV_OBJ_FLAG_SCROLLABLE);
 
-    g_inputValueLabels[i] = lv_label_create(g_manualScreen);
-    lv_label_set_text(g_inputValueLabels[i], "OFF");
-    lv_obj_set_style_text_color(g_inputValueLabels[i], lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(g_inputValueLabels[i], LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(g_inputValueLabels[i], 190, y + 7);
+    g_inputValueLabels[i] = CreateWhiteLabel(g_manualScreen, "OFF", 190, y + 7);
   }
 
   // ------------------------------------------------------------
   // Assignable inputs
   // ------------------------------------------------------------
-  lv_obj_t * assignableInputHeader = lv_label_create(g_manualScreen);
-  lv_label_set_text(assignableInputHeader, "Assignable Inputs");
-  lv_obj_set_style_text_color(assignableInputHeader, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(assignableInputHeader, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(assignableInputHeader, 40, 220);
+  CreateWhiteLabel(g_manualScreen, "Assignable Inputs", 40, 220);
 
   for (int i = 0; i < AssignableInSize; i++) {
     int y = 250 + (i * 38);
 
-    lv_obj_t * name = lv_label_create(g_manualScreen);
-    lv_label_set_text(name, AssignableInputLabels[i]);
-    lv_obj_set_style_text_color(name, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(name, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(name, 40, y + 7);
+    CreateWhiteLabel(g_manualScreen, AssignableInputLabels[i], 40, y + 7);
 
     g_assignableInputIndicators[i] = lv_obj_create(g_manualScreen);
     lv_obj_set_size(g_assignableInputIndicators[i], 28, 28);
@@ -718,21 +767,13 @@ static void GigaDisplay_CreateManualScreen()
     lv_obj_set_style_border_color(g_assignableInputIndicators[i], lv_color_hex(0xA0A0A0), LV_PART_MAIN);
     lv_obj_clear_flag(g_assignableInputIndicators[i], LV_OBJ_FLAG_SCROLLABLE);
 
-    g_assignableInputValueLabels[i] = lv_label_create(g_manualScreen);
-    lv_label_set_text(g_assignableInputValueLabels[i], "OFF");
-    lv_obj_set_style_text_color(g_assignableInputValueLabels[i], lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(g_assignableInputValueLabels[i], LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(g_assignableInputValueLabels[i], 190, y + 7);
+    g_assignableInputValueLabels[i] = CreateWhiteLabel(g_manualScreen, "OFF", 190, y + 7);
   }
 
   // ------------------------------------------------------------
   // Physical output indicators
   // ------------------------------------------------------------
-  lv_obj_t * outputHeader = lv_label_create(g_manualScreen);
-  lv_label_set_text(outputHeader, "Outputs");
-  lv_obj_set_style_text_color(outputHeader, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(outputHeader, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(outputHeader, 330, 45);
+  CreateWhiteLabel(g_manualScreen, "Outputs", 330, 45);
 
   for (int i = 0; i < PhysicalOutSize; i++) {
     int col = i / 4;
@@ -741,11 +782,7 @@ static void GigaDisplay_CreateManualScreen()
     int x = 330 + (col * 220);
     int y = 75 + (row * 42);
 
-    lv_obj_t * name = lv_label_create(g_manualScreen);
-    lv_label_set_text(name, OUTPUT_NAMES[i]);
-    lv_obj_set_style_text_color(name, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(name, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(name, x, y + 7);
+    CreateWhiteLabel(g_manualScreen, OUTPUT_NAMES[i], x, y + 7);
 
     g_outputIndicators[i] = lv_obj_create(g_manualScreen);
     lv_obj_set_size(g_outputIndicators[i], 28, 28);
@@ -755,21 +792,13 @@ static void GigaDisplay_CreateManualScreen()
     lv_obj_set_style_border_color(g_outputIndicators[i], lv_color_hex(0xA0A0A0), LV_PART_MAIN);
     lv_obj_clear_flag(g_outputIndicators[i], LV_OBJ_FLAG_SCROLLABLE);
 
-    g_outputValueLabels[i] = lv_label_create(g_manualScreen);
-    lv_label_set_text(g_outputValueLabels[i], "OFF");
-    lv_obj_set_style_text_color(g_outputValueLabels[i], lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(g_outputValueLabels[i], LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(g_outputValueLabels[i], x + 158, y + 7);
+    g_outputValueLabels[i] = CreateWhiteLabel(g_manualScreen, "OFF", x + 158, y + 7);
   }
 
   // ------------------------------------------------------------
   // Manual control buttons
   // ------------------------------------------------------------
-  lv_obj_t * buttonHeader = lv_label_create(g_manualScreen);
-  lv_label_set_text(buttonHeader, "Manual Controls");
-  lv_obj_set_style_text_color(buttonHeader, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(buttonHeader, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(buttonHeader, 300, 250);
+  CreateWhiteLabel(g_manualScreen, "Manual Controls", 300, 250);
 
   for (int i = 0; i < MANUAL_BUTTON_COUNT; i++) {
     int col = i % 4;
@@ -778,42 +807,18 @@ static void GigaDisplay_CreateManualScreen()
     int x = 300 + (col * 120);
     int y = 280 + (row * 58);
 
-    lv_obj_t * toggleBtn = lv_btn_create(g_manualScreen);
-    lv_obj_set_size(toggleBtn, 110, 44);
-    lv_obj_set_pos(toggleBtn, x, y);
-    lv_obj_add_event_cb(toggleBtn, OutputToggle_Event, LV_EVENT_CLICKED, (void *)(uintptr_t)i);
-
-    lv_obj_t * toggleLabel = lv_label_create(toggleBtn);
-    lv_label_set_text(toggleLabel, MANUAL_BUTTON_NAMES[i]);
-    lv_obj_set_style_text_font(toggleLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_center(toggleLabel);
+    CreateButton(g_manualScreen, MANUAL_BUTTON_NAMES[i], x, y, 110, 44, OutputToggle_Event, (void *)(uintptr_t)i);
   }
 
   // ------------------------------------------------------------
   // Navigation buttons
   // ------------------------------------------------------------
-  lv_obj_t * hitachiBtn = lv_btn_create(g_manualScreen);
-  lv_obj_set_size(hitachiBtn, 120, 44);
-  lv_obj_set_pos(hitachiBtn, 535, 415);
-  lv_obj_add_event_cb(hitachiBtn, HitachiButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * hitachiLabel = lv_label_create(hitachiBtn);
-  lv_label_set_text(hitachiLabel, "Hitachi");
-  lv_obj_set_style_text_font(hitachiLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(hitachiLabel);
-
-  lv_obj_t * backBtn = lv_btn_create(g_manualScreen);
-  lv_obj_set_size(backBtn, 120, 44);
-  lv_obj_set_pos(backBtn, 665, 415);
-  lv_obj_add_event_cb(backBtn, BackButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * backLabel = lv_label_create(backBtn);
-  lv_label_set_text(backLabel, "Back");
-  lv_obj_set_style_text_font(backLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(backLabel);
+  CreateButton(g_manualScreen, "Hitachi", 535, 415, 120, 44, HitachiButton_Event, NULL);
+  CreateButton(g_manualScreen, "Back", 665, 415, 120, 44, BackButton_Event, NULL);
 
   g_manualScreenBuilt = true;
 }
+
 
 void GigaDisplay_ShowManualScreen()
 {
@@ -887,98 +892,36 @@ static void GigaDisplay_CreateAutoScreen()
   lv_obj_set_style_bg_color(g_autoScreen, lv_color_hex(0x000000), LV_PART_MAIN);
   lv_obj_clear_flag(g_autoScreen, LV_OBJ_FLAG_SCROLLABLE);
 
-  // Title
-  lv_obj_t * title = lv_label_create(g_autoScreen);
-  lv_label_set_text(title, "Auto");
-  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(title, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 12);
+  // ------------------------------------------------------------
+  // Top status labels
+  // ------------------------------------------------------------
+  CreateCenteredWhiteLabel(g_autoScreen, "Auto", LV_ALIGN_TOP_MID, 0, 12);
 
-  // Status
-  g_autoStatusLabel = lv_label_create(g_autoScreen);
-  lv_label_set_text(g_autoStatusLabel, "Status: Stopped");
-  lv_obj_set_style_text_color(g_autoStatusLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_autoStatusLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(g_autoStatusLabel, 40, 55);
-
-  g_autoRemainingLabel = lv_label_create(g_autoScreen);
-  lv_label_set_text(g_autoRemainingLabel, "Remaining: 0:00");
-  lv_obj_set_style_text_color(g_autoRemainingLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_autoRemainingLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(g_autoRemainingLabel, 300, 55);
-
-  g_autoCurrentOutputLabel = lv_label_create(g_autoScreen);
-  lv_label_set_text(g_autoCurrentOutputLabel, "Hitachi Output: 0%");
-  lv_obj_set_style_text_color(g_autoCurrentOutputLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_autoCurrentOutputLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(g_autoCurrentOutputLabel, 560, 55);
+  g_autoStatusLabel = CreateWhiteLabel(g_autoScreen, "Status: Stopped", 40, 55);
+  g_autoRemainingLabel = CreateWhiteLabel(g_autoScreen, "Remaining: 0:00", 300, 55);
+  g_autoCurrentOutputLabel = CreateWhiteLabel(g_autoScreen, "Hitachi Output: 0%", 560, 55);
 
   // ------------------------------------------------------------
   // Auto control buttons
   // ------------------------------------------------------------
-
   const int buttonY = 100;
   const int buttonW = 150;
   const int buttonH = 60;
 
-  lv_obj_t * startBtn = lv_btn_create(g_autoScreen);
-  lv_obj_set_size(startBtn, buttonW, buttonH);
-  lv_obj_set_pos(startBtn, 40, buttonY);
-  lv_obj_add_event_cb(startBtn, AutoStartButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * startLabel = lv_label_create(startBtn);
-  lv_label_set_text(startLabel, "Start");
-  lv_obj_set_style_text_font(startLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(startLabel);
-
-  lv_obj_t * stopBtn = lv_btn_create(g_autoScreen);
-  lv_obj_set_size(stopBtn, buttonW, buttonH);
-  lv_obj_set_pos(stopBtn, 220, buttonY);
-  lv_obj_add_event_cb(stopBtn, AutoStopButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * stopLabel = lv_label_create(stopBtn);
-  lv_label_set_text(stopLabel, "Stop");
-  lv_obj_set_style_text_font(stopLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(stopLabel);
-
-  lv_obj_t * pauseBtn = lv_btn_create(g_autoScreen);
-  lv_obj_set_size(pauseBtn, buttonW, buttonH);
-  lv_obj_set_pos(pauseBtn, 400, buttonY);
-  lv_obj_add_event_cb(pauseBtn, AutoPauseButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * pauseLabel = lv_label_create(pauseBtn);
-  lv_label_set_text(pauseLabel, "Pause");
-  lv_obj_set_style_text_font(pauseLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(pauseLabel);
-
-  lv_obj_t * hitachiBtn = lv_btn_create(g_autoScreen);
-  lv_obj_set_size(hitachiBtn, buttonW, buttonH);
-  lv_obj_set_pos(hitachiBtn, 580, buttonY);
-  lv_obj_add_event_cb(hitachiBtn, HitachiButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * hitachiLabel = lv_label_create(hitachiBtn);
-  lv_label_set_text(hitachiLabel, "Hitachi");
-  lv_obj_set_style_text_font(hitachiLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(hitachiLabel);
+  CreateButton(g_autoScreen, "Start", 40, buttonY, buttonW, buttonH, AutoStartButton_Event, NULL);
+  CreateButton(g_autoScreen, "Stop", 220, buttonY, buttonW, buttonH, AutoStopButton_Event, NULL);
+  CreateButton(g_autoScreen, "Pause", 400, buttonY, buttonW, buttonH, AutoPauseButton_Event, NULL);
+  CreateButton(g_autoScreen, "Hitachi", 580, buttonY, buttonW, buttonH, HitachiButton_Event, NULL);
 
   // ------------------------------------------------------------
   // Input indicators
   // ------------------------------------------------------------
-
-  lv_obj_t * inputHeader = lv_label_create(g_autoScreen);
-  lv_label_set_text(inputHeader, "Inputs");
-  lv_obj_set_style_text_color(inputHeader, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(inputHeader, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(inputHeader, 40, 195);
+  CreateWhiteLabel(g_autoScreen, "Inputs", 40, 195);
 
   for (int i = 0; i < InSize; i++) {
     int y = 220 + (i * 42);
 
-    lv_obj_t * name = lv_label_create(g_autoScreen);
-    lv_label_set_text(name, INPUT_NAMES[i]);
-    lv_obj_set_style_text_color(name, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(name, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(name, 40, y + 8);
+    CreateWhiteLabel(g_autoScreen, INPUT_NAMES[i], 40, y + 8);
 
     g_autoInputIndicators[i] = lv_obj_create(g_autoScreen);
     lv_obj_set_size(g_autoInputIndicators[i], 30, 30);
@@ -988,28 +931,19 @@ static void GigaDisplay_CreateAutoScreen()
     lv_obj_set_style_border_color(g_autoInputIndicators[i], lv_color_hex(0xA0A0A0), LV_PART_MAIN);
     lv_obj_clear_flag(g_autoInputIndicators[i], LV_OBJ_FLAG_SCROLLABLE);
 
-    g_autoInputValueLabels[i] = lv_label_create(g_autoScreen);
-    lv_label_set_text(g_autoInputValueLabels[i], "OFF");
-    lv_obj_set_style_text_color(g_autoInputValueLabels[i], lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(g_autoInputValueLabels[i], LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(g_autoInputValueLabels[i], 190, y + 8);
+    g_autoInputValueLabels[i] = CreateWhiteLabel(g_autoScreen, "OFF", 190, y + 8);
   }
 
-  lv_obj_t * assignableInputHeader = lv_label_create(g_autoScreen);
-  lv_label_set_text(assignableInputHeader, "Assignable");
-  lv_obj_set_style_text_color(assignableInputHeader, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(assignableInputHeader, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(assignableInputHeader, 40, 350);
+  // ------------------------------------------------------------
+  // Assignable input indicators
+  // ------------------------------------------------------------
+  CreateWhiteLabel(g_autoScreen, "Assignable", 40, 350);
 
   for (int i = 0; i < AssignableInSize; i++) {
     int y = 375 + (i * 32);
 
-    lv_obj_t * name = lv_label_create(g_autoScreen);
-    lv_label_set_text(name, AssignableInputLabels[i]);
-    lv_obj_set_style_text_color(name, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(name, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(name, 40, y + 6);
-    
+    CreateWhiteLabel(g_autoScreen, AssignableInputLabels[i], 40, y + 6);
+
     g_autoAssignableInputIndicators[i] = lv_obj_create(g_autoScreen);
     lv_obj_set_size(g_autoAssignableInputIndicators[i], 24, 24);
     lv_obj_set_pos(g_autoAssignableInputIndicators[i], 150, y);
@@ -1017,23 +951,14 @@ static void GigaDisplay_CreateAutoScreen()
     lv_obj_set_style_border_width(g_autoAssignableInputIndicators[i], 2, LV_PART_MAIN);
     lv_obj_set_style_border_color(g_autoAssignableInputIndicators[i], lv_color_hex(0xA0A0A0), LV_PART_MAIN);
     lv_obj_clear_flag(g_autoAssignableInputIndicators[i], LV_OBJ_FLAG_SCROLLABLE);
-    
-    g_autoAssignableInputValueLabels[i] = lv_label_create(g_autoScreen);
-    lv_label_set_text(g_autoAssignableInputValueLabels[i], "OFF");
-    lv_obj_set_style_text_color(g_autoAssignableInputValueLabels[i], lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(g_autoAssignableInputValueLabels[i], LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(g_autoAssignableInputValueLabels[i], 180, y + 6);
+
+    g_autoAssignableInputValueLabels[i] = CreateWhiteLabel(g_autoScreen, "OFF", 180, y + 6);
   }
 
   // ------------------------------------------------------------
   // Output indicators
   // ------------------------------------------------------------
-
-  lv_obj_t * outputHeader = lv_label_create(g_autoScreen);
-  lv_label_set_text(outputHeader, "Outputs");
-  lv_obj_set_style_text_color(outputHeader, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(outputHeader, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(outputHeader, 330, 195);
+  CreateWhiteLabel(g_autoScreen, "Outputs", 330, 195);
 
   for (int i = 0; i < OutSize; i++) {
     int col = i / 3;
@@ -1042,11 +967,7 @@ static void GigaDisplay_CreateAutoScreen()
     int x = 300 + (col * 165);
     int y = 220 + (row * 50);
 
-    lv_obj_t * name = lv_label_create(g_autoScreen);
-    lv_label_set_text(name, OUTPUT_NAMES[i]);
-    lv_obj_set_style_text_color(name, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(name, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(name, x, y + 8);
+    CreateWhiteLabel(g_autoScreen, OUTPUT_NAMES[i], x, y + 8);
 
     g_autoOutputIndicators[i] = lv_obj_create(g_autoScreen);
     lv_obj_set_size(g_autoOutputIndicators[i], 28, 28);
@@ -1056,34 +977,14 @@ static void GigaDisplay_CreateAutoScreen()
     lv_obj_set_style_border_color(g_autoOutputIndicators[i], lv_color_hex(0xA0A0A0), LV_PART_MAIN);
     lv_obj_clear_flag(g_autoOutputIndicators[i], LV_OBJ_FLAG_SCROLLABLE);
 
-    g_autoOutputValueLabels[i] = lv_label_create(g_autoScreen);
-    lv_label_set_text(g_autoOutputValueLabels[i], "OFF");
-    lv_obj_set_style_text_color(g_autoOutputValueLabels[i], lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(g_autoOutputValueLabels[i], LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(g_autoOutputValueLabels[i], x + 122, y + 8);
+    g_autoOutputValueLabels[i] = CreateWhiteLabel(g_autoScreen, "OFF", x + 122, y + 8);
   }
 
-  // Settings Button
-  lv_obj_t * settingsBtn = lv_btn_create(g_autoScreen);
-  lv_obj_set_size(settingsBtn, 120, 44);
-  lv_obj_set_pos(settingsBtn, 535, 415);
-  lv_obj_add_event_cb(settingsBtn, AutoSettingsButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * settingsLabel = lv_label_create(settingsBtn);
-  lv_label_set_text(settingsLabel, "Settings");
-  lv_obj_set_style_text_font(settingsLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(settingsLabel);
-
-  // Back button
-  lv_obj_t * backBtn = lv_btn_create(g_autoScreen);
-  lv_obj_set_size(backBtn, 120, 44);
-  lv_obj_set_pos(backBtn, 665, 415);
-  lv_obj_add_event_cb(backBtn, AutoBackButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * backLabel = lv_label_create(backBtn);
-  lv_label_set_text(backLabel, "Back");
-  lv_obj_set_style_text_font(backLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(backLabel);
+  // ------------------------------------------------------------
+  // Navigation buttons
+  // ------------------------------------------------------------
+  CreateButton(g_autoScreen, "Settings", 535, 415, 120, 44, AutoSettingsButton_Event, NULL);
+  CreateButton(g_autoScreen, "Back", 665, 415, 120, 44, AutoBackButton_Event, NULL);
 
   g_autoScreenBuilt = true;
 }
@@ -1224,20 +1125,8 @@ static void GigaDisplay_CreateAutoSettingsScreen()
   lv_obj_set_style_bg_color(g_autoSettingsScreen, lv_color_hex(0x000000), LV_PART_MAIN);
   lv_obj_set_scroll_dir(g_autoSettingsScreen, LV_DIR_VER);
 
-  lv_obj_t * title = lv_label_create(g_autoSettingsScreen);
-  lv_label_set_text(title, "Auto Settings");
-  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(title, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 12);
-
-  lv_obj_t * backBtn = lv_btn_create(g_autoSettingsScreen);
-  lv_obj_set_size(backBtn, 120, 45);
-  lv_obj_set_pos(backBtn, 650, 20);
-  lv_obj_add_event_cb(backBtn, AutoSettingsBackButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * backLabel = lv_label_create(backBtn);
-  lv_label_set_text(backLabel, "Back");
-  lv_obj_center(backLabel);
+  CreateCenteredWhiteLabel(g_autoSettingsScreen, "Auto Settings", LV_ALIGN_TOP_MID, 0, 12);
+  CreateButton(g_autoSettingsScreen, "Back", 650, 20, 120, 45, AutoSettingsBackButton_Event, NULL);
 
   CreateAutoSettingsSlider(g_autoSettingsScreen, "Run Duration", 85, 1, 300,
                            &g_autoRunDurationSlider, &g_autoRunDurationValueLabel);
@@ -1254,11 +1143,7 @@ static void GigaDisplay_CreateAutoSettingsScreen()
   CreateAutoSettingsSlider(g_autoSettingsScreen, "IO Off Time", 325, 0, 100,
                            &g_autoOffTimeSlider, &g_autoOffTimeValueLabel);
 
-  lv_obj_t * modeHeader = lv_label_create(g_autoSettingsScreen);
-  lv_label_set_text(modeHeader, "Output Modes");
-  lv_obj_set_style_text_color(modeHeader, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(modeHeader, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(modeHeader, 35, 395);
+  CreateWhiteLabel(g_autoSettingsScreen, "Output Modes", 35, 395);
 
   int y = 440;
 
@@ -1269,29 +1154,13 @@ static void GigaDisplay_CreateAutoSettingsScreen()
         continue;
       }
 
-    lv_obj_t * nameLabel = lv_label_create(g_autoSettingsScreen);
-    lv_label_set_text(nameLabel, OUTPUT_NAMES[outputIndex]);
-    lv_obj_set_style_text_color(nameLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    lv_obj_set_style_text_font(nameLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_set_pos(nameLabel, 50, y + 12);
+    CreateWhiteLabel(g_autoSettingsScreen, OUTPUT_NAMES[outputIndex], 50, y + 12);
 
-    lv_obj_t * modeBtn = lv_btn_create(g_autoSettingsScreen);
-    lv_obj_set_size(modeBtn, 260, 44);
-    lv_obj_set_pos(modeBtn, 250, y);
-    lv_obj_add_event_cb(modeBtn, AutoOutputModeButton_Event, LV_EVENT_CLICKED, (void *)(uintptr_t)outputIndex);
+    lv_obj_t * modeBtn = CreateButton(g_autoSettingsScreen, "Off", 250, y, 260, 44, AutoOutputModeButton_Event, (void *)(uintptr_t)outputIndex);
+    g_autoOutputModeLabels[outputIndex] = lv_obj_get_child(modeBtn, 0);
 
-    g_autoOutputModeLabels[outputIndex] = lv_label_create(modeBtn);
-    lv_label_set_text(g_autoOutputModeLabels[outputIndex], "Off");
-    lv_obj_center(g_autoOutputModeLabels[outputIndex]);
-
-    lv_obj_t * inputBtn = lv_btn_create(g_autoSettingsScreen);
-    lv_obj_set_size(inputBtn, 140, 44);
-    lv_obj_set_pos(inputBtn, 530, y);
-    lv_obj_add_event_cb(inputBtn, AutoOutputInputButton_Event, LV_EVENT_CLICKED, (void *)(uintptr_t)outputIndex);
-
-    g_autoOutputInputLabels[outputIndex] = lv_label_create(inputBtn);
-    lv_label_set_text(g_autoOutputInputLabels[outputIndex], "Input 1");
-    lv_obj_center(g_autoOutputInputLabels[outputIndex]);
+    lv_obj_t * inputBtn = CreateButton(g_autoSettingsScreen, "Input 1", 530, y, 140, 44, AutoOutputInputButton_Event, (void *)(uintptr_t)outputIndex);
+    g_autoOutputInputLabels[outputIndex] = lv_obj_get_child(inputBtn, 0);
 
     y += 58;
 
@@ -1448,60 +1317,27 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_obj_set_style_bg_color(g_hitachiScreen, lv_color_hex(0x000000), LV_PART_MAIN);
   lv_obj_clear_flag(g_hitachiScreen, LV_OBJ_FLAG_SCROLLABLE);
 
-  lv_obj_t * title = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(title, "Hitachi");
-  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(title, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+  CreateCenteredWhiteLabel(g_hitachiScreen, "Hitachi", LV_ALIGN_TOP_MID, 0, 10);
 
-  g_hitachiCurrentOutputLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(g_hitachiCurrentOutputLabel, "Output: 0%");
-  lv_obj_set_style_text_color(g_hitachiCurrentOutputLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_hitachiCurrentOutputLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(g_hitachiCurrentOutputLabel, LV_ALIGN_TOP_RIGHT, -30, 14);
+  g_hitachiCurrentOutputLabel = CreateCenteredWhiteLabel(g_hitachiScreen, "Output: 0%", LV_ALIGN_TOP_RIGHT, -30, 14);
 
-  lv_obj_t * onBtn = lv_btn_create(g_hitachiScreen);
-  lv_obj_set_size(onBtn, 110, 42);
-  lv_obj_set_pos(onBtn, 30, 55);
-  lv_obj_add_event_cb(onBtn, HitachiEditOnButton_Event, LV_EVENT_CLICKED, NULL);
+  CreateButton(g_hitachiScreen, "Edit ON", 30, 55, 110, 42, HitachiEditOnButton_Event, NULL);
+  CreateButton(g_hitachiScreen, "Edit OFF", 155, 55, 110, 42, HitachiEditOffButton_Event, NULL);
 
-  lv_obj_t * onLabel = lv_label_create(onBtn);
-  lv_label_set_text(onLabel, "Edit ON");
-  lv_obj_set_style_text_font(onLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(onLabel);
-
-  lv_obj_t * offBtn = lv_btn_create(g_hitachiScreen);
-  lv_obj_set_size(offBtn, 110, 42);
-  lv_obj_set_pos(offBtn, 155, 55);
-  lv_obj_add_event_cb(offBtn, HitachiEditOffButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * offLabel = lv_label_create(offBtn);
-  lv_label_set_text(offLabel, "Edit OFF");
-  lv_obj_set_style_text_font(offLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(offLabel);
-
-  g_hitachiEditorLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(g_hitachiEditorLabel, "Editing: ON settings");
-  lv_obj_set_style_text_color(g_hitachiEditorLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_hitachiEditorLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(g_hitachiEditorLabel, 290, 67);
-
-  g_hitachiModeLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(g_hitachiModeLabel, "Mode: Value");
-  lv_obj_set_style_text_color(g_hitachiModeLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_hitachiModeLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(g_hitachiModeLabel, 520, 67);
+  g_hitachiEditorLabel = CreateWhiteLabel(g_hitachiScreen, "Editing: ON settings", 290, 67);
+  g_hitachiModeLabel = CreateWhiteLabel(g_hitachiScreen, "Mode: Value", 520, 67);
 
   for (int i = 0; i < HITACHI_MODE_COUNT; i++) {
-    lv_obj_t * modeBtn = lv_btn_create(g_hitachiScreen);
-    lv_obj_set_size(modeBtn, 102, 42);
-    lv_obj_set_pos(modeBtn, 30 + (i * 108), 112);
-    lv_obj_add_event_cb(modeBtn, HitachiModeButton_Event, LV_EVENT_CLICKED, (void *)(uintptr_t)i);
-
-    lv_obj_t * modeLabel = lv_label_create(modeBtn);
-    lv_label_set_text(modeLabel, HITACHI_MODE_NAMES[i]);
-    lv_obj_set_style_text_font(modeLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-    lv_obj_center(modeLabel);
+    CreateButton(
+      g_hitachiScreen,
+      HITACHI_MODE_NAMES[i],
+      30 + (i * 108),
+      112,
+      102,
+      42,
+      HitachiModeButton_Event,
+      (void *)(uintptr_t)i
+    );
   }
 
   const int labelX = 35;
@@ -1509,11 +1345,7 @@ static void GigaDisplay_CreateHitachiScreen()
   const int valueX = 690;
   const int sliderW = 500;
 
-  lv_obj_t * setPointLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(setPointLabel, "Set Point");
-  lv_obj_set_style_text_color(setPointLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(setPointLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(setPointLabel, labelX, 185);
+  CreateWhiteLabel(g_hitachiScreen, "Set Point", labelX, 185);
 
   g_hitachiSetPointSlider = lv_slider_create(g_hitachiScreen);
   lv_slider_set_range(g_hitachiSetPointSlider, State_GetHitachiMinRelayValue(), 100);
@@ -1521,17 +1353,9 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_obj_set_pos(g_hitachiSetPointSlider, sliderX, 190);
   lv_obj_add_event_cb(g_hitachiSetPointSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
 
-  g_hitachiSetPointValueLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(g_hitachiSetPointValueLabel, "25%");
-  lv_obj_set_style_text_color(g_hitachiSetPointValueLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_hitachiSetPointValueLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(g_hitachiSetPointValueLabel, valueX, 185);
+  g_hitachiSetPointValueLabel = CreateWhiteLabel(g_hitachiScreen, "25%", valueX, 185);
 
-  lv_obj_t * maxLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(maxLabel, "Max Value");
-  lv_obj_set_style_text_color(maxLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(maxLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(maxLabel, labelX, 245);
+  CreateWhiteLabel(g_hitachiScreen, "Max Value", labelX, 245);
 
   g_hitachiMaxSlider = lv_slider_create(g_hitachiScreen);
   lv_slider_set_range(g_hitachiMaxSlider, State_GetHitachiMinRelayValue(), 100);
@@ -1539,17 +1363,9 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_obj_set_pos(g_hitachiMaxSlider, sliderX, 250);
   lv_obj_add_event_cb(g_hitachiMaxSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
 
-  g_hitachiMaxValueLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(g_hitachiMaxValueLabel, "100%");
-  lv_obj_set_style_text_color(g_hitachiMaxValueLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_hitachiMaxValueLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(g_hitachiMaxValueLabel, valueX, 245);
+  g_hitachiMaxValueLabel = CreateWhiteLabel(g_hitachiScreen, "100%", valueX, 245);
 
-  lv_obj_t * minLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(minLabel, "Min Value");
-  lv_obj_set_style_text_color(minLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(minLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(minLabel, labelX, 305);
+  CreateWhiteLabel(g_hitachiScreen, "Min Value", labelX, 305);
 
   g_hitachiMinSlider = lv_slider_create(g_hitachiScreen);
   lv_slider_set_range(g_hitachiMinSlider, State_GetHitachiMinRelayValue(), 100);
@@ -1557,17 +1373,9 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_obj_set_pos(g_hitachiMinSlider, sliderX, 310);
   lv_obj_add_event_cb(g_hitachiMinSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
 
-  g_hitachiMinValueLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(g_hitachiMinValueLabel, "25%");
-  lv_obj_set_style_text_color(g_hitachiMinValueLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_hitachiMinValueLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(g_hitachiMinValueLabel, valueX, 305);
+  g_hitachiMinValueLabel = CreateWhiteLabel(g_hitachiScreen, "25%", valueX, 305);
 
-  lv_obj_t * periodLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(periodLabel, "Period");
-  lv_obj_set_style_text_color(periodLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(periodLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(periodLabel, labelX, 365);
+  CreateWhiteLabel(g_hitachiScreen, "Period", labelX, 365);
 
   g_hitachiPeriodSlider = lv_slider_create(g_hitachiScreen);
   lv_slider_set_range(g_hitachiPeriodSlider, 0, 100);
@@ -1575,12 +1383,9 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_obj_set_pos(g_hitachiPeriodSlider, sliderX, 370);
   lv_obj_add_event_cb(g_hitachiPeriodSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
 
-  g_hitachiPeriodValueLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(g_hitachiPeriodValueLabel, "0.1 s");
-  lv_obj_set_style_text_color(g_hitachiPeriodValueLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_hitachiPeriodValueLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(g_hitachiPeriodValueLabel, valueX, 365);
+  g_hitachiPeriodValueLabel = CreateWhiteLabel(g_hitachiScreen, "0.1 s", valueX, 365);
 
+  // Keep this one custom because we need the inner label pointer.
   lv_obj_t * periodModeBtn = lv_btn_create(g_hitachiScreen);
   lv_obj_set_size(periodModeBtn, 170, 42);
   lv_obj_set_pos(periodModeBtn, 35, 415);
@@ -1591,31 +1396,10 @@ static void GigaDisplay_CreateHitachiScreen()
   lv_obj_set_style_text_font(g_hitachiPeriodModeLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
   lv_obj_center(g_hitachiPeriodModeLabel);
 
-  g_hitachiDimmerEnableLabel = lv_label_create(g_hitachiScreen);
-  lv_label_set_text(g_hitachiDimmerEnableLabel, "Dimmer: OFF");
-  lv_obj_set_style_text_color(g_hitachiDimmerEnableLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_hitachiDimmerEnableLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(g_hitachiDimmerEnableLabel, LV_ALIGN_BOTTOM_MID, -115, -38);
+  g_hitachiDimmerEnableLabel = CreateCenteredWhiteLabel(g_hitachiScreen, "Dimmer: OFF", LV_ALIGN_BOTTOM_MID, -115, -38);
 
-  lv_obj_t * relayMinBtn = lv_btn_create(g_hitachiScreen);
-  lv_obj_set_size(relayMinBtn, 130, 50);
-  lv_obj_align(relayMinBtn, LV_ALIGN_BOTTOM_RIGHT, -175, -25);
-  lv_obj_add_event_cb(relayMinBtn, HitachiRelayMinButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * relayMinLabel = lv_label_create(relayMinBtn);
-  lv_label_set_text(relayMinLabel, "Relay Min");
-  lv_obj_set_style_text_font(relayMinLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(relayMinLabel);
-
-  lv_obj_t * backBtn = lv_btn_create(g_hitachiScreen);
-  lv_obj_set_size(backBtn, 130, 50);
-  lv_obj_align(backBtn, LV_ALIGN_BOTTOM_RIGHT, -30, -25);
-  lv_obj_add_event_cb(backBtn, HitachiBackButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * backLabel = lv_label_create(backBtn);
-  lv_label_set_text(backLabel, "Back");
-  lv_obj_set_style_text_font(backLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(backLabel);
+  CreateAlignedButton(g_hitachiScreen, "Relay Min", LV_ALIGN_BOTTOM_RIGHT, -175, -25, 130, 50, HitachiRelayMinButton_Event, NULL);
+  CreateAlignedButton(g_hitachiScreen, "Back", LV_ALIGN_BOTTOM_RIGHT, -30, -25, 130, 50, HitachiBackButton_Event, NULL);
 
   g_hitachiScreenBuilt = true;
 }
@@ -1719,72 +1503,21 @@ static void GigaDisplay_CreateHitachiRelayMinScreen()
   lv_obj_set_style_bg_color(g_hitachiRelayMinScreen, lv_color_hex(0x000000), LV_PART_MAIN);
   lv_obj_clear_flag(g_hitachiRelayMinScreen, LV_OBJ_FLAG_SCROLLABLE);
 
-  lv_obj_t * title = lv_label_create(g_hitachiRelayMinScreen);
-  lv_label_set_text(title, "Dimmer Relay Minimum");
-  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(title, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 30);
+  CreateCenteredWhiteLabel(g_hitachiRelayMinScreen, "Dimmer Relay Minimum", LV_ALIGN_TOP_MID, 0, 30);
+  CreateCenteredWhiteLabel(g_hitachiRelayMinScreen, "Relay turns ON when Hitachi output is at or above this value.", LV_ALIGN_TOP_MID, 0, 80);
 
-  lv_obj_t * note = lv_label_create(g_hitachiRelayMinScreen);
-  lv_label_set_text(note, "Relay turns ON when Hitachi output is at or above this value.");
-  lv_obj_set_style_text_color(note, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(note, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(note, LV_ALIGN_TOP_MID, 0, 80);
-
-  g_hitachiRelayMinValueLabel = lv_label_create(g_hitachiRelayMinScreen);
-  lv_label_set_text(g_hitachiRelayMinValueLabel, "Min: 25%");
-  lv_obj_set_style_text_color(g_hitachiRelayMinValueLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(g_hitachiRelayMinValueLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_align(g_hitachiRelayMinValueLabel, LV_ALIGN_TOP_MID, 0, 145);
+  g_hitachiRelayMinValueLabel = CreateCenteredWhiteLabel(g_hitachiRelayMinScreen, "Min: 25%", LV_ALIGN_TOP_MID, 0, 145);
 
   const int buttonW = 120;
   const int buttonH = 60;
   const int y1 = 210;
 
-  lv_obj_t * minus5Btn = lv_btn_create(g_hitachiRelayMinScreen);
-  lv_obj_set_size(minus5Btn, buttonW, buttonH);
-  lv_obj_set_pos(minus5Btn, 180, y1);
-  lv_obj_add_event_cb(minus5Btn, HitachiRelayMinMinus5Button_Event, LV_EVENT_CLICKED, NULL);
+  CreateButton(g_hitachiRelayMinScreen, "-5", 180, y1, buttonW, buttonH, HitachiRelayMinMinus5Button_Event, NULL);
+  CreateButton(g_hitachiRelayMinScreen, "-1", 320, y1, buttonW, buttonH, HitachiRelayMinMinusButton_Event, NULL);
+  CreateButton(g_hitachiRelayMinScreen, "+1", 460, y1, buttonW, buttonH, HitachiRelayMinPlusButton_Event, NULL);
+  CreateButton(g_hitachiRelayMinScreen, "+5", 600, y1, buttonW, buttonH, HitachiRelayMinPlus5Button_Event, NULL);
 
-  lv_obj_t * minus5Label = lv_label_create(minus5Btn);
-  lv_label_set_text(minus5Label, "-5");
-  lv_obj_center(minus5Label);
-
-  lv_obj_t * minusBtn = lv_btn_create(g_hitachiRelayMinScreen);
-  lv_obj_set_size(minusBtn, buttonW, buttonH);
-  lv_obj_set_pos(minusBtn, 320, y1);
-  lv_obj_add_event_cb(minusBtn, HitachiRelayMinMinusButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * minusLabel = lv_label_create(minusBtn);
-  lv_label_set_text(minusLabel, "-1");
-  lv_obj_center(minusLabel);
-
-  lv_obj_t * plusBtn = lv_btn_create(g_hitachiRelayMinScreen);
-  lv_obj_set_size(plusBtn, buttonW, buttonH);
-  lv_obj_set_pos(plusBtn, 460, y1);
-  lv_obj_add_event_cb(plusBtn, HitachiRelayMinPlusButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * plusLabel = lv_label_create(plusBtn);
-  lv_label_set_text(plusLabel, "+1");
-  lv_obj_center(plusLabel);
-
-  lv_obj_t * plus5Btn = lv_btn_create(g_hitachiRelayMinScreen);
-  lv_obj_set_size(plus5Btn, buttonW, buttonH);
-  lv_obj_set_pos(plus5Btn, 600, y1);
-  lv_obj_add_event_cb(plus5Btn, HitachiRelayMinPlus5Button_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * plus5Label = lv_label_create(plus5Btn);
-  lv_label_set_text(plus5Label, "+5");
-  lv_obj_center(plus5Label);
-
-  lv_obj_t * backBtn = lv_btn_create(g_hitachiRelayMinScreen);
-  lv_obj_set_size(backBtn, 130, 50);
-  lv_obj_align(backBtn, LV_ALIGN_BOTTOM_RIGHT, -30, -25);
-  lv_obj_add_event_cb(backBtn, HitachiRelayMinBackButton_Event, LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t * backLabel = lv_label_create(backBtn);
-  lv_label_set_text(backLabel, "Back");
-  lv_obj_center(backLabel);
+  CreateAlignedButton(g_hitachiRelayMinScreen, "Back", LV_ALIGN_BOTTOM_RIGHT, -30, -25, 130, 50, HitachiRelayMinBackButton_Event, NULL);
 
   g_hitachiRelayMinScreenBuilt = true;
 }
