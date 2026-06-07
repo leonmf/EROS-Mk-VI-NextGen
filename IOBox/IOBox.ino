@@ -377,6 +377,7 @@ void Execute_EROSFlex(void);
 void ID_Idle(void);
 void ID_EROSFlex(void);
 
+void Control_Setup(void);
 void Control_Task(void);
 void CheckMode(void);
 void RunMode(void);
@@ -395,82 +396,13 @@ FunctionPointer IdleOps[] = {
   ID_EROSFlex};
 
 void setup() {
-
-  
-  //Open debug serial connection
+  // Open debug serial connection
   Serial.begin(57600);
 
+  //Setup embedded control functions.
+  Control_Setup();
 
-  //Setup the Hitachi AC Dimmer
-  GigaDimmer_Setup();  
-
-
-
-    float x; 
-    float y; 
-    for(int i=0;i<255;i++) 
-    { 
-        x=(float)i;
-        y=sin((x/255)*2*PI); 
-        hS.sine[i]=int(y*128)+128; 
-    }
-  
-
-  for (int i = 0; i < PhysicalOutSize; i++)
-  {
-    pinMode(OutRly[i], OUTPUT);
-  }
-
-  for (int i = 0; i < OutSize; i++)
-  {
-    OutValues[i] = LOW;
-  }
-
-  for (int i=0; i<InSize; i++)
-  {
-    pinMode(DigitalInputs[i],INPUT_PULLUP);
-  }
-
-  for (int i = 0; i < AssignableInSize; i++)
-  {
-    pinMode(AssignableInputPins[i], INPUT_PULLUP);
-  }
-  
-  //Outputs initialize ON.  Turn them off before they can actually initialize.
-  SetOutputs();
-
-
-
-  
-  //Always go to idle mode on startup
-  Mode.Current = 0;
-  Mode.Last = -1;
-
-  //Default Hitachi Settings
-  hS.minRelayValue = 10;
-  hS.periodOff = 1000;
-  hS.minValueOff = 10;
-  hS.maxValueOff = 100;
-  hS.modeOff = 0;
-  hS.setPointOff = 0;
-
-  hS.periodOn = 1000;
-  hS.minValueOn = 10;
-  hS.maxValueOn = 100;
-  hS.modeOn = 1;
-  hS.setPointOn = 100;
-  
-  UseIODisplay = true;
-  resetTimeDisplay = true;
-
-  //Initialize flash storage
-  Settings_Begin();
-  //Load settings from flash memory.
-  Settings_LoadAllOrDefaults();
-
-  Command_ForceFixedAutoOutputModes();
-
-  //Initialize the Giga Display UI
+  // Initialize the Giga Display UI
   GigaDisplay_Setup();
 }
 
