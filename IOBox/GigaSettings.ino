@@ -20,7 +20,7 @@
 #include <FATFileSystem.h>
 #include <string.h>
 
-#define SETTINGS_VERSION 1
+#define SETTINGS_VERSION 2
 #define SETTINGS_MAGIC   0x45524F53UL  // "EROS"
 
 #define SETTINGS_MOUNT_NAME       "fs"
@@ -47,6 +47,8 @@ struct EROS_PersistedSettings
   int hitachi_setPointOn;
   int hitachi_periodOff;
   int hitachi_periodOn;
+  bool hitachi_periodPreciseOff;
+  bool hitachi_periodPreciseOn;
   int hitachi_maxValueOff;
   int hitachi_maxValueOn;
   int hitachi_minValueOff;
@@ -178,6 +180,8 @@ static void Settings_CopyFromRuntime(struct EROS_PersistedSettings & settings)
   settings.hitachi_setPointOn = hS.setPointOn;
   settings.hitachi_periodOff = hS.periodOff;
   settings.hitachi_periodOn = hS.periodOn;
+  settings.hitachi_periodPreciseOff = hS.periodPreciseOff;
+  settings.hitachi_periodPreciseOn = hS.periodPreciseOn;
   settings.hitachi_maxValueOff = hS.maxValueOff;
   settings.hitachi_maxValueOn = hS.maxValueOn;
   settings.hitachi_minValueOff = hS.minValueOff;
@@ -232,6 +236,9 @@ static void Settings_CopyToRuntime(const struct EROS_PersistedSettings & setting
   hS.periodOff = constrain(settings.hitachi_periodOff, 100, 300000);
   hS.periodOn = constrain(settings.hitachi_periodOn, 100, 300000);
 
+  hS.periodPreciseOff = settings.hitachi_periodPreciseOff ? true : false;
+  hS.periodPreciseOn = settings.hitachi_periodPreciseOn ? true : false;
+
   hS.maxValueOff = constrain(settings.hitachi_maxValueOff, 25, 100);
   hS.maxValueOn = constrain(settings.hitachi_maxValueOn, 25, 100);
 
@@ -271,6 +278,9 @@ void Settings_LoadDefaults()
 
   hS.periodOff = 1000;
   hS.periodOn = 1000;
+
+  hS.periodPreciseOff = true;
+  hS.periodPreciseOn = true;
 
   hS.maxValueOff = 100;
   hS.maxValueOn = 100;

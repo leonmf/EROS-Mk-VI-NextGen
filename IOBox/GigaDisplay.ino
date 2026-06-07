@@ -1613,9 +1613,6 @@ void GigaDisplay_ShowHitachiScreen()
 
   g_previousScreenBeforeHitachi = lv_scr_act();
 
-  int periodMs = State_GetHitachiPeriod(g_hitachiEditingOnSettings);
-  g_hitachiPeriodPreciseMode = (periodMs <= 2000);
-
   if (!g_hitachiScreenBuilt) {
     GigaDisplay_CreateHitachiScreen();
   }
@@ -1640,9 +1637,8 @@ static void GigaDisplay_UpdateHitachiScreen()
   Command_SetHitachiMaxValue(g_hitachiEditingOnSettings, maxValue);
   Command_SetHitachiMinValue(g_hitachiEditingOnSettings, minValue);
 
-  //int periodMaxMs = g_hitachiPeriodPreciseMode ? 2000 : 300000;
-  //int periodMs = constrain(State_GetHitachiPeriod(g_hitachiEditingOnSettings), 100, periodMaxMs);
-  //Command_SetHitachiPeriod(g_hitachiEditingOnSettings, periodMs);
+  g_hitachiPeriodPreciseMode =
+    State_GetHitachiPeriodPrecise(g_hitachiEditingOnSettings);
 
   int periodMs = State_GetHitachiPeriod(g_hitachiEditingOnSettings);
   periodMs = constrain(periodMs, 100, 300000);
@@ -1911,8 +1907,7 @@ static void HitachiSlider_Event(lv_event_t * e)
 
 static void HitachiPeriodModeButton_Event(lv_event_t * e)
 {
-  g_hitachiPeriodPreciseMode = !g_hitachiPeriodPreciseMode;
-
+  Command_ToggleHitachiPeriodPrecise(g_hitachiEditingOnSettings);
   GigaDisplay_UpdateHitachiScreen();
 }
 

@@ -285,36 +285,48 @@ void Command_SetHitachiPeriod(bool onSettings, int periodMs)
   *State_HitachiPeriodPtr(onSettings) = constrain(periodMs, 100, 300000);
 }
 
+bool State_GetHitachiPeriodPrecise(bool onSettings)
+{
+  return onSettings ? hS.periodPreciseOn : hS.periodPreciseOff;
+}
+
+void Command_SetHitachiPeriodPrecise(bool onSettings, bool precise)
+{
+  if (onSettings) {
+    hS.periodPreciseOn = precise;
+  }
+  else {
+    hS.periodPreciseOff = precise;
+  }
+}
+
+void Command_ToggleHitachiPeriodPrecise(bool onSettings)
+{
+  Command_SetHitachiPeriodPrecise(
+    onSettings,
+    !State_GetHitachiPeriodPrecise(onSettings)
+  );
+}
+
 void Command_NormalizeHitachiSettings()
 {
-  hS.modeOff = constrain(hS.modeOff, hitachiOff, hitachiRandom);
-  hS.modeOn = constrain(hS.modeOn, hitachiOff, hitachiRandom);
-
-  hS.setPointOff = constrain(hS.setPointOff, 25, 100);
   hS.setPointOn = constrain(hS.setPointOn, 25, 100);
-
-  hS.periodOff = constrain(hS.periodOff, 100, 300000);
+  hS.maxValueOn = constrain(hS.maxValueOn, 25, 100);
+  hS.minValueOn = constrain(hS.minValueOn, 25, 100);
   hS.periodOn = constrain(hS.periodOn, 100, 300000);
 
+  hS.setPointOff = constrain(hS.setPointOff, 25, 100);
   hS.maxValueOff = constrain(hS.maxValueOff, 25, 100);
-  hS.maxValueOn = constrain(hS.maxValueOn, 25, 100);
-
   hS.minValueOff = constrain(hS.minValueOff, 25, 100);
-  hS.minValueOn = constrain(hS.minValueOn, 25, 100);
-  
-  hS.minRelayValue = constrain(hS.minRelayValue, 0, 100);
+  hS.periodOff = constrain(hS.periodOff, 100, 300000);
 
-  if (hS.maxValueOff < hS.minValueOff) {
-    int temp = hS.maxValueOff;
-    hS.maxValueOff = hS.minValueOff;
-    hS.minValueOff = temp;
-  }
+  hS.modeOn = constrain(hS.modeOn, hitachiOff, hitachiRandom);
+  hS.modeOff = constrain(hS.modeOff, hitachiOff, hitachiRandom);
 
-  if (hS.maxValueOn < hS.minValueOn) {
-    int temp = hS.maxValueOn;
-    hS.maxValueOn = hS.minValueOn;
-    hS.minValueOn = temp;
-  }
+  // Do NOT infer precise/coarse from period here.
+  // Just normalize the stored precise/coarse flags to clean boolean values.
+  hS.periodPreciseOn = hS.periodPreciseOn ? true : false;
+  hS.periodPreciseOff = hS.periodPreciseOff ? true : false;
 }
 
 int State_GetHitachiCurrentOutput()

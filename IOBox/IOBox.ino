@@ -149,6 +149,9 @@ bool State_GetHitachiVirtualRequest();
 bool State_GetHitachiVirtualOutput();
 void Command_SetHitachiVirtualRequest(bool enabled);
 void Command_ToggleHitachiVirtualRequest();
+bool State_GetHitachiPeriodPrecise(bool onSettings);
+void Command_SetHitachiPeriodPrecise(bool onSettings, bool precise);
+void Command_ToggleHitachiPeriodPrecise(bool onSettings);
 
 void State_RefreshControlStatus();
 
@@ -276,9 +279,7 @@ boolean OutValues[OutSize];
 byte saveEEPROM = 0;
 byte loadEEPROM = 0;
 byte pairBT = 0;
-byte UseIODisplay = 0;
 byte TimeDisplayModulus = 0;
-boolean resetTimeDisplay;
 byte ReadSettings;
 boolean InitIODisplay;
 //const int NumModes = 3;
@@ -350,6 +351,8 @@ struct hitachi_Settings
   int setPointOn;
   int periodOff;
   int periodOn;
+  bool periodPreciseOff;
+  bool periodPreciseOn;
   int maxValueOff;
   int maxValueOn;
   int minValueOff;

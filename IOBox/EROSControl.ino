@@ -52,21 +52,6 @@ void Control_Setup(void)
   Mode.Current = 0;
   Mode.Last = -1;
 
-  // Default Hitachi Settings
-  hS.minRelayValue = 10;
-  hS.periodOff = 1000;
-  hS.minValueOff = 10;
-  hS.maxValueOff = 100;
-  hS.modeOff = 0;
-  hS.setPointOff = 0;
-
-  hS.periodOn = 1000;
-  hS.minValueOn = 10;
-  hS.maxValueOn = 100;
-  hS.modeOn = 1;
-  hS.setPointOn = 100;
-  UseIODisplay = true;
-  resetTimeDisplay = true;
 
   // Initialize flash storage
   Settings_Begin();
@@ -112,7 +97,7 @@ void CheckMode()
       Detach_Timer();
     }
 
-    resetTimeDisplay = true;
+
     
     Mode.Last = Mode.Current;
     InitFunctions[Mode.Current]();
