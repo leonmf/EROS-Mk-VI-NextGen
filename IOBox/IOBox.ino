@@ -149,6 +149,8 @@ bool State_GetHitachiVirtualOutput();
 void Command_SetHitachiVirtualRequest(bool enabled);
 void Command_ToggleHitachiVirtualRequest();
 
+void State_RefreshControlStatus();
+
 //Settings save load prototypes
 bool Settings_SaveAll();
 bool Settings_LoadAll();

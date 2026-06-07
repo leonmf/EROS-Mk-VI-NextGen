@@ -16,16 +16,69 @@
 */
 
 // ------------------------------------------------------------
-// Input / Output state
+// Control status snapshot
+//
+// For now this is refreshed from the existing globals.
+// Later this can become the M4-to-M7 status message.
 // ------------------------------------------------------------
 
+struct EROS_ControlStatus
+{
+  bool input[InSize];
+  bool assignableInput[AssignableInSize];
+  bool output[OutSize];
+
+  bool autoRunning;
+  bool autoPaused;
+
+  unsigned int autoRemainingTime;
+  unsigned int autoCurrentTime;
+  unsigned int autoRunDuration;
+
+  int hitachiCurrentOutput;
+};
+
+static EROS_ControlStatus g_controlStatus;
+
+void State_RefreshControlStatus()
+{
+  for (int i = 0; i < InSize; i++)
+  {
+    g_controlStatus.input[i] = InValues[i];
+  }
+
+  for (int i = 0; i < AssignableInSize; i++)
+  {
+    // INPUT_PULLUP logic:
+    // LOW means the input is active.
+    g_controlStatus.assignableInput[i] = (digitalRead(AssignableInputPins[i]) == LOW);
+  }
+
+  for (int i = 0; i < OutSize; i++)
+  {
+    g_controlStatus.output[i] = OutValues[i];
+  }
+
+  g_controlStatus.autoRunning = TimeVar.bRunning;
+  g_controlStatus.autoPaused = TimeVar.bPaused;
+
+  g_controlStatus.autoRemainingTime = TimeVar.iRemainingTime;
+  g_controlStatus.autoCurrentTime = TimeVar.iCurrentTime;
+  g_controlStatus.autoRunDuration = TimeVar.iRunDuration;
+
+  g_controlStatus.hitachiCurrentOutput = hS.currentOutput;
+}
+
+// ------------------------------------------------------------
+// Input / Output state
+// ------------------------------------------------------------
 bool State_GetInput(int inputIndex)
 {
   if (inputIndex < 0 || inputIndex >= InSize) {
     return false;
   }
 
-  return InValues[inputIndex];
+  return g_controlStatus.input[inputIndex];
 }
 
 bool State_GetAssignableInput(int inputIndex)
@@ -35,9 +88,7 @@ bool State_GetAssignableInput(int inputIndex)
     return false;
   }
 
-  // INPUT_PULLUP logic:
-  // LOW means the input is active.
-  return digitalRead(AssignableInputPins[inputIndex]) == LOW;
+  return g_controlStatus.assignableInput[inputIndex];
 }
 
 bool State_GetAssignedInputForOutput(int outputIndex)
@@ -63,7 +114,7 @@ bool State_GetOutput(int outputIndex)
     return false;
   }
 
-  return OutValues[outputIndex];
+  return g_controlStatus.output[outputIndex];
 }
 
 bool State_GetManualOutputRequest(int outputIndex)
@@ -236,7 +287,7 @@ void Command_SetHitachiPeriod(bool onSettings, int periodMs)
 
 int State_GetHitachiCurrentOutput()
 {
-  return hS.currentOutput;
+  return g_controlStatus.hitachiCurrentOutput;
 }
 
 // ------------------------------------------------------------
@@ -284,27 +335,27 @@ void Command_RequestAutoPause()
 
 bool State_GetAutoRunning()
 {
-  return TimeVar.bRunning;
+  return g_controlStatus.autoRunning;
 }
 
 bool State_GetAutoPaused()
 {
-  return TimeVar.bPaused;
+  return g_controlStatus.autoPaused;
 }
 
 unsigned int State_GetAutoRemainingTime()
 {
-  return TimeVar.iRemainingTime;
+  return g_controlStatus.autoRemainingTime;
 }
 
 unsigned int State_GetAutoCurrentTime()
 {
-  return TimeVar.iCurrentTime;
+  return g_controlStatus.autoCurrentTime;
 }
 
 unsigned int State_GetAutoRunDuration()
 {
-  return TimeVar.iRunDuration;
+  return g_controlStatus.autoRunDuration;
 }
 
 // ------------------------------------------------------------
@@ -387,6 +438,12 @@ void Command_SetAutoOutputMode(int outputIndex, byte mode)
   // Locks are fixed ON.
   if (outputIndex == OUT_LOCK_1 || outputIndex == OUT_LOCK_2) {
     EROSFlexSettings.OutMode[outputIndex] = 1;
+    return;
+  }
+
+  // Dimmer relay is automatic and should not be user-configured.
+  if (outputIndex == OUT_DIMMER_ENABLE) {
+    EROSFlexSettings.OutMode[outputIndex] = 0;
     return;
   }
 

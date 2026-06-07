@@ -73,12 +73,15 @@ void Control_Setup(void)
 
   // Load settings from flash memory
   Settings_LoadAllOrDefaults();
+
   Command_ForceFixedAutoOutputModes();
+
+  // Seed the UI/control status snapshot before the first display update.
+  State_RefreshControlStatus();
 }
 
 void Control_Task(void)
 {
-  
   UpdateRunTimer();
 
   ReadInputs(InSize);
@@ -86,6 +89,8 @@ void Control_Task(void)
   CheckMode();
 
   RunMode();
+
+  State_RefreshControlStatus();
 }
 
 void CheckMode()
