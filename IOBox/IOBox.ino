@@ -377,6 +377,10 @@ void Execute_EROSFlex(void);
 void ID_Idle(void);
 void ID_EROSFlex(void);
 
+void Control_Task(void);
+void CheckMode(void);
+void RunMode(void);
+
 typedef void (* FunctionPointer) (); //Typedef Setup function pointers
 FunctionPointer InitFunctions[] = {
   Init_Idle,
@@ -470,105 +474,21 @@ void setup() {
   GigaDisplay_Setup();
 }
 
+
 void loop() {
-  //Serial.println("Loop4");
-  //delay(1000);
-  //Handle display tasks.
-  
+  //Update the LCD Display
   GigaDisplay_Task();
-  
-  UpdateRunTimer();
-
-  ReadInputs(InSize);
-  
-  CheckMode();
-  RunMode();
-
- 
-
-
+  //Handle embedded functons
+  Control_Task();
 }
 
-void CheckMode()
-{
-  
-  if ((Mode.Current > ModeMax || Mode.Current < 0))
-  {
-    //Reset mode to zero if we try to set something outside of allowed variables
-    Mode.Current = 0;    
-  }
-
-    if (Mode.Current != Mode.Last)
-  {
-
-    
-    if(Mode.Last == EROSFlexMode)
-    {
-      Detach_Timer();
-    }
 
 
 
-    resetTimeDisplay = true;
-    
-    Mode.Last = Mode.Current;
-
-    InitFunctions[Mode.Current]();
-    
-    TimeVar.bRunning = false;
-    TimeVar.bPaused = false;
-    //Cause the IO display to be regenerated
-    InitIODisplay = true;
-  }
-
-  
-}
-
-void RunMode()
-{   
-  
-
-  if (TimeVar.bRunning == true | UseTimingFunctions[Mode.Current] == false)
-  {
-    if (TimeVar.PauseButton>=0 && UseTimingFunctions[Mode.Current] == true)
-    {
-      CheckPauseButton(TimeVar.PauseButton);
-    }
-
-    if (TimeVar.StopButton>=0 && UseTimingFunctions[Mode.Current] == true)
-    {
-      CheckStopButton(TimeVar.StopButton);
-    }
-    
-    if(UseTimingFunctions[Mode.Current] == true && TimeVar.bRunning == false)
-    {
-      ResetIO(); 
-    }
-  
-    ExecFunctions[Mode.Current]();
-  }
-  else
-  {
-
-    IdleOps[Mode.Current]();
-    CheckRunButton(TimeVar.StartButton);
-  }
 
 
 
-  
-  if (DisplayDigital[Mode.Current])
-  {
-    DisplayIO(5, InitIODisplay);
-  }
-  InitIODisplay = false; 
 
-
-  SetOutputs();
-
- 
- 
-}
 
 
 
