@@ -418,6 +418,21 @@ static lv_obj_t * CreateAlignedButton(
   void * userData
 );
 
+static lv_obj_t * CreateSliderWithValueLabel(
+  lv_obj_t * parent,
+  const char * labelText,
+  int labelX,
+  int sliderX,
+  int valueX,
+  int y,
+  int sliderW,
+  int minVal,
+  int maxVal,
+  const char * initialValueText,
+  lv_obj_t ** valueLabel,
+  lv_event_cb_t eventCb
+);
+
 static lv_obj_t * CreateWhiteLabel(
   lv_obj_t * parent,
   const char * text,
@@ -504,6 +519,37 @@ static lv_obj_t * CreateAlignedButton(
   lv_obj_center(label);
 
   return btn;
+}
+
+static lv_obj_t * CreateSliderWithValueLabel(
+  lv_obj_t * parent,
+  const char * labelText,
+  int labelX,
+  int sliderX,
+  int valueX,
+  int y,
+  int sliderW,
+  int minVal,
+  int maxVal,
+  const char * initialValueText,
+  lv_obj_t ** valueLabel,
+  lv_event_cb_t eventCb
+)
+{
+  CreateWhiteLabel(parent, labelText, labelX, y);
+
+  lv_obj_t * slider = lv_slider_create(parent);
+  lv_slider_set_range(slider, minVal, maxVal);
+  lv_obj_set_size(slider, sliderW, 20);
+  lv_obj_set_pos(slider, sliderX, y + 5);
+
+  if (eventCb != NULL) {
+    lv_obj_add_event_cb(slider, eventCb, LV_EVENT_VALUE_CHANGED, NULL);
+  }
+
+  *valueLabel = CreateWhiteLabel(parent, initialValueText, valueX, y);
+
+  return slider;
 }
 
 static void SetIndicatorState(lv_obj_t * indicator, bool state)
@@ -1089,7 +1135,6 @@ static int AutoSettings_MsValueToSlider(int ms)
 // ------------------------------------------------------------
 // Auto Settings screen
 // ------------------------------------------------------------
-
 static void CreateAutoSettingsSlider(
   lv_obj_t * parent,
   const char * labelText,
@@ -1100,23 +1145,7 @@ static void CreateAutoSettingsSlider(
   lv_obj_t ** valueLabel
 )
 {
-  lv_obj_t * label = lv_label_create(parent);
-  lv_label_set_text(label, labelText);
-  lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(label, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(label, 35, y);
-
-  *slider = lv_slider_create(parent);
-  lv_slider_set_range(*slider, minVal, maxVal);
-  lv_obj_set_size(*slider, 480, 20);
-  lv_obj_set_pos(*slider, 190, y + 5);
-  lv_obj_add_event_cb(*slider, AutoSettingsSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
-
-  *valueLabel = lv_label_create(parent);
-  lv_label_set_text(*valueLabel, "");
-  lv_obj_set_style_text_color(*valueLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_text_font(*valueLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_set_pos(*valueLabel, 690, y);
+  *slider = CreateSliderWithValueLabel(parent, labelText, 35, 190, 690, y, 480, minVal, maxVal, "", valueLabel, AutoSettingsSlider_Event);
 }
 
 static void GigaDisplay_CreateAutoSettingsScreen()
@@ -1345,56 +1374,24 @@ static void GigaDisplay_CreateHitachiScreen()
   const int valueX = 690;
   const int sliderW = 500;
 
-  CreateWhiteLabel(g_hitachiScreen, "Set Point", labelX, 185);
+  g_hitachiSetPointSlider = CreateSliderWithValueLabel(
+    g_hitachiScreen, "Set Point", labelX, sliderX, valueX, 185, sliderW, State_GetHitachiMinRelayValue(),
+    100, "25%", &g_hitachiSetPointValueLabel, HitachiSlider_Event);
 
-  g_hitachiSetPointSlider = lv_slider_create(g_hitachiScreen);
-  lv_slider_set_range(g_hitachiSetPointSlider, State_GetHitachiMinRelayValue(), 100);
-  lv_obj_set_size(g_hitachiSetPointSlider, sliderW, 20);
-  lv_obj_set_pos(g_hitachiSetPointSlider, sliderX, 190);
-  lv_obj_add_event_cb(g_hitachiSetPointSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
+  g_hitachiMaxSlider = CreateSliderWithValueLabel(
+    g_hitachiScreen, "Max Value", labelX, sliderX, valueX, 245, sliderW, State_GetHitachiMinRelayValue(), 
+    100, "100%", &g_hitachiMaxValueLabel, HitachiSlider_Event);  
 
-  g_hitachiSetPointValueLabel = CreateWhiteLabel(g_hitachiScreen, "25%", valueX, 185);
+  g_hitachiMinSlider = CreateSliderWithValueLabel(
+    g_hitachiScreen, "Min Value", labelX, sliderX, valueX, 305, sliderW, State_GetHitachiMinRelayValue(), 
+    100, "25%", &g_hitachiMinValueLabel, HitachiSlider_Event);
 
-  CreateWhiteLabel(g_hitachiScreen, "Max Value", labelX, 245);
+  g_hitachiPeriodSlider = CreateSliderWithValueLabel(
+    g_hitachiScreen, "Period", labelX, sliderX, valueX, 365, sliderW, 0, 100, "0.1 s", 
+    &g_hitachiPeriodValueLabel, HitachiSlider_Event);
 
-  g_hitachiMaxSlider = lv_slider_create(g_hitachiScreen);
-  lv_slider_set_range(g_hitachiMaxSlider, State_GetHitachiMinRelayValue(), 100);
-  lv_obj_set_size(g_hitachiMaxSlider, sliderW, 20);
-  lv_obj_set_pos(g_hitachiMaxSlider, sliderX, 250);
-  lv_obj_add_event_cb(g_hitachiMaxSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
-
-  g_hitachiMaxValueLabel = CreateWhiteLabel(g_hitachiScreen, "100%", valueX, 245);
-
-  CreateWhiteLabel(g_hitachiScreen, "Min Value", labelX, 305);
-
-  g_hitachiMinSlider = lv_slider_create(g_hitachiScreen);
-  lv_slider_set_range(g_hitachiMinSlider, State_GetHitachiMinRelayValue(), 100);
-  lv_obj_set_size(g_hitachiMinSlider, sliderW, 20);
-  lv_obj_set_pos(g_hitachiMinSlider, sliderX, 310);
-  lv_obj_add_event_cb(g_hitachiMinSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
-
-  g_hitachiMinValueLabel = CreateWhiteLabel(g_hitachiScreen, "25%", valueX, 305);
-
-  CreateWhiteLabel(g_hitachiScreen, "Period", labelX, 365);
-
-  g_hitachiPeriodSlider = lv_slider_create(g_hitachiScreen);
-  lv_slider_set_range(g_hitachiPeriodSlider, 0, 100);
-  lv_obj_set_size(g_hitachiPeriodSlider, sliderW, 20);
-  lv_obj_set_pos(g_hitachiPeriodSlider, sliderX, 370);
-  lv_obj_add_event_cb(g_hitachiPeriodSlider, HitachiSlider_Event, LV_EVENT_VALUE_CHANGED, NULL);
-
-  g_hitachiPeriodValueLabel = CreateWhiteLabel(g_hitachiScreen, "0.1 s", valueX, 365);
-
-  // Keep this one custom because we need the inner label pointer.
-  lv_obj_t * periodModeBtn = lv_btn_create(g_hitachiScreen);
-  lv_obj_set_size(periodModeBtn, 170, 42);
-  lv_obj_set_pos(periodModeBtn, 35, 415);
-  lv_obj_add_event_cb(periodModeBtn, HitachiPeriodModeButton_Event, LV_EVENT_CLICKED, NULL);
-
-  g_hitachiPeriodModeLabel = lv_label_create(periodModeBtn);
-  lv_label_set_text(g_hitachiPeriodModeLabel, "Period: Precise");
-  lv_obj_set_style_text_font(g_hitachiPeriodModeLabel, LV_FONT_DEFAULT, LV_PART_MAIN);
-  lv_obj_center(g_hitachiPeriodModeLabel);
+  lv_obj_t * periodModeBtn = CreateButton(g_hitachiScreen, "Period: Precise", 35, 415, 170, 42, HitachiPeriodModeButton_Event, NULL);
+  g_hitachiPeriodModeLabel = lv_obj_get_child(periodModeBtn, 0);
 
   g_hitachiDimmerEnableLabel = CreateCenteredWhiteLabel(g_hitachiScreen, "Dimmer: OFF", LV_ALIGN_BOTTOM_MID, -115, -38);
 
