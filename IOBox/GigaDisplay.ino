@@ -440,6 +440,8 @@ static lv_obj_t * CreateIndicatorBox(
   int size
 );
 
+static lv_obj_t * CreateScreen(bool scrollable);
+
 static lv_obj_t * CreateWhiteLabel(
   lv_obj_t * parent,
   const char * text,
@@ -575,6 +577,21 @@ static lv_obj_t * CreateIndicatorBox(
   lv_obj_clear_flag(indicator, LV_OBJ_FLAG_SCROLLABLE);
 
   return indicator;
+}
+
+static lv_obj_t * CreateScreen(bool scrollable)
+{
+  lv_obj_t * screen = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(screen, lv_color_hex(0x000000), LV_PART_MAIN);
+
+  if (scrollable) {
+    lv_obj_set_scroll_dir(screen, LV_DIR_VER);
+  }
+  else {
+    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+  }
+
+  return screen;
 }
 
 static void SetIndicatorState(lv_obj_t * indicator, bool state)
@@ -735,9 +752,7 @@ static void GigaDisplay_DestroyHitachiScreen()
 
 static void GigaDisplay_CreateIdleScreen()
 {
-  g_idleScreen = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(g_idleScreen, lv_color_hex(0x000000), LV_PART_MAIN);
-  lv_obj_clear_flag(g_idleScreen, LV_OBJ_FLAG_SCROLLABLE);
+  g_idleScreen = CreateScreen(false);
 
   lv_obj_t * border = lv_obj_create(g_idleScreen);
   lv_obj_set_size(border, Display.width() - 20, Display.height() - 20);
@@ -790,9 +805,7 @@ void GigaDisplay_ShowIdleScreen()
 // ------------------------------------------------------------
 static void GigaDisplay_CreateManualScreen()
 {
-  g_manualScreen = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(g_manualScreen, lv_color_hex(0x000000), LV_PART_MAIN);
-  lv_obj_clear_flag(g_manualScreen, LV_OBJ_FLAG_SCROLLABLE);
+  g_manualScreen = CreateScreen(false);
 
   // ------------------------------------------------------------
   // Current Hitachi output label
@@ -941,9 +954,7 @@ static void AutoSettings_FormatMs(char * buffer, size_t bufferSize, unsigned int
 
 static void GigaDisplay_CreateAutoScreen()
 {
-  g_autoScreen = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(g_autoScreen, lv_color_hex(0x000000), LV_PART_MAIN);
-  lv_obj_clear_flag(g_autoScreen, LV_OBJ_FLAG_SCROLLABLE);
+  g_autoScreen = CreateScreen(false);
 
   // ------------------------------------------------------------
   // Top status labels
@@ -1139,9 +1150,7 @@ static void CreateAutoSettingsSlider(
 
 static void GigaDisplay_CreateAutoSettingsScreen()
 {
-  g_autoSettingsScreen = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(g_autoSettingsScreen, lv_color_hex(0x000000), LV_PART_MAIN);
-  lv_obj_set_scroll_dir(g_autoSettingsScreen, LV_DIR_VER);
+  g_autoSettingsScreen = CreateScreen(true);
 
   CreateCenteredWhiteLabel(g_autoSettingsScreen, "Auto Settings", LV_ALIGN_TOP_MID, 0, 12);
   CreateButton(g_autoSettingsScreen, "Back", 650, 20, 120, 45, AutoSettingsBackButton_Event, NULL);
@@ -1331,9 +1340,7 @@ static void Hitachi_FormatPeriod(char * buffer, size_t bufferSize, int periodMs)
 
 static void GigaDisplay_CreateHitachiScreen()
 {
-  g_hitachiScreen = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(g_hitachiScreen, lv_color_hex(0x000000), LV_PART_MAIN);
-  lv_obj_clear_flag(g_hitachiScreen, LV_OBJ_FLAG_SCROLLABLE);
+  g_hitachiScreen = CreateScreen(false);
 
   CreateCenteredWhiteLabel(g_hitachiScreen, "Hitachi", LV_ALIGN_TOP_MID, 0, 10);
 
@@ -1476,9 +1483,7 @@ static void GigaDisplay_UpdateHitachiScreen()
 // ------------------------------------------------------------
 static void GigaDisplay_CreateHitachiRelayMinScreen()
 {
-  g_hitachiRelayMinScreen = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(g_hitachiRelayMinScreen, lv_color_hex(0x000000), LV_PART_MAIN);
-  lv_obj_clear_flag(g_hitachiRelayMinScreen, LV_OBJ_FLAG_SCROLLABLE);
+  g_hitachiRelayMinScreen = CreateScreen(false);
 
   CreateCenteredWhiteLabel(g_hitachiRelayMinScreen, "Dimmer Relay Minimum", LV_ALIGN_TOP_MID, 0, 30);
   CreateCenteredWhiteLabel(g_hitachiRelayMinScreen, "Relay turns ON when Hitachi output is at or above this value.", LV_ALIGN_TOP_MID, 0, 80);
