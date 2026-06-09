@@ -406,6 +406,8 @@ static lv_obj_t * CreateButton(
   void * userData
 );
 
+static lv_obj_t * GetButtonLabel(lv_obj_t * button);
+
 static lv_obj_t * CreateAlignedButton(
   lv_obj_t * parent,
   const char * text,
@@ -441,6 +443,31 @@ static lv_obj_t * CreateIndicatorBox(
 );
 
 static lv_obj_t * CreateScreen(bool scrollable);
+
+static lv_obj_t * CreateBorderBox(
+  lv_obj_t * parent,
+  int x,
+  int y,
+  int w,
+  int h,
+  int borderWidth,
+  int radius,
+  uint32_t borderColor
+);
+
+static lv_obj_t * CreateScreenTitle(
+  lv_obj_t * parent,
+  const char * text
+);
+
+static lv_obj_t * CreateStatusLabel(
+  lv_obj_t * parent,
+  const char * text,
+  int x,
+  int y
+);
+
+static lv_obj_t * CreateTopRightOutputLabel(lv_obj_t * parent);
 
 static lv_obj_t * CreateWhiteLabel(
   lv_obj_t * parent,
@@ -500,6 +527,15 @@ static lv_obj_t * CreateButton(
   lv_obj_center(label);
 
   return btn;
+}
+
+static lv_obj_t * GetButtonLabel(lv_obj_t * button)
+{
+  if (button == NULL) {
+    return NULL;
+  }
+
+  return lv_obj_get_child(button, 0);
 }
 
 static lv_obj_t * CreateAlignedButton(
@@ -592,6 +628,52 @@ static lv_obj_t * CreateScreen(bool scrollable)
   }
 
   return screen;
+}
+
+static lv_obj_t * CreateBorderBox(
+  lv_obj_t * parent,
+  int x,
+  int y,
+  int w,
+  int h,
+  int borderWidth,
+  int radius,
+  uint32_t borderColor
+)
+{
+  lv_obj_t * border = lv_obj_create(parent);
+  lv_obj_set_size(border, w, h);
+  lv_obj_set_pos(border, x, y);
+  lv_obj_set_style_bg_opa(border, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_border_width(border, borderWidth, LV_PART_MAIN);
+  lv_obj_set_style_border_color(border, lv_color_hex(borderColor), LV_PART_MAIN);
+  lv_obj_set_style_radius(border, radius, LV_PART_MAIN);
+  lv_obj_clear_flag(border, LV_OBJ_FLAG_SCROLLABLE);
+
+  return border;
+}
+
+static lv_obj_t * CreateScreenTitle(
+  lv_obj_t * parent,
+  const char * text
+)
+{
+  return CreateCenteredWhiteLabel(parent, text, LV_ALIGN_TOP_MID, 0, 12);
+}
+
+static lv_obj_t * CreateStatusLabel(
+  lv_obj_t * parent,
+  const char * text,
+  int x,
+  int y
+)
+{
+  return CreateWhiteLabel(parent, text, x, y);
+}
+
+static lv_obj_t * CreateTopRightOutputLabel(lv_obj_t * parent)
+{
+  return CreateCenteredWhiteLabel(parent, "Output: 0%", LV_ALIGN_TOP_RIGHT, -30, 14);
 }
 
 static void SetIndicatorState(lv_obj_t * indicator, bool state)
@@ -754,14 +836,7 @@ static void GigaDisplay_CreateIdleScreen()
 {
   g_idleScreen = CreateScreen(false);
 
-  lv_obj_t * border = lv_obj_create(g_idleScreen);
-  lv_obj_set_size(border, Display.width() - 20, Display.height() - 20);
-  lv_obj_set_pos(border, 10, 10);
-  lv_obj_set_style_bg_opa(border, LV_OPA_TRANSP, LV_PART_MAIN);
-  lv_obj_set_style_border_width(border, 3, LV_PART_MAIN);
-  lv_obj_set_style_border_color(border, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-  lv_obj_set_style_radius(border, 8, LV_PART_MAIN);
-  lv_obj_clear_flag(border, LV_OBJ_FLAG_SCROLLABLE);
+  CreateBorderBox(g_idleScreen, 10, 10, Display.width() - 20, Display.height() - 20, 3, 8, 0xFFFFFF);
 
   CreateCenteredWhiteLabel(g_idleScreen, "EROS Mk VI", LV_ALIGN_TOP_MID, 0, 28);
 
@@ -810,7 +885,7 @@ static void GigaDisplay_CreateManualScreen()
   // ------------------------------------------------------------
   // Current Hitachi output label
   // ------------------------------------------------------------
-  g_manualCurrentOutputLabel = CreateCenteredWhiteLabel(g_manualScreen, "Output: 0%", LV_ALIGN_TOP_RIGHT, -30, 14);
+  g_manualCurrentOutputLabel = CreateTopRightOutputLabel(g_manualScreen);
 
   // ------------------------------------------------------------
   // Dedicated inputs
@@ -959,11 +1034,11 @@ static void GigaDisplay_CreateAutoScreen()
   // ------------------------------------------------------------
   // Top status labels
   // ------------------------------------------------------------
-  CreateCenteredWhiteLabel(g_autoScreen, "Auto", LV_ALIGN_TOP_MID, 0, 12);
+  CreateScreenTitle(g_autoScreen, "Auto");
 
-  g_autoStatusLabel = CreateWhiteLabel(g_autoScreen, "Status: Stopped", 40, 55);
-  g_autoRemainingLabel = CreateWhiteLabel(g_autoScreen, "Remaining: 0:00", 300, 55);
-  g_autoCurrentOutputLabel = CreateWhiteLabel(g_autoScreen, "Hitachi Output: 0%", 560, 55);
+  g_autoStatusLabel = CreateStatusLabel(g_autoScreen, "Status: Stopped", 40, 55);
+  g_autoRemainingLabel = CreateStatusLabel(g_autoScreen, "Remaining: 0:00", 300, 55);
+  g_autoCurrentOutputLabel = CreateStatusLabel(g_autoScreen, "Hitachi Output: 0%", 560, 55);
 
   // ------------------------------------------------------------
   // Auto control buttons
@@ -1152,7 +1227,8 @@ static void GigaDisplay_CreateAutoSettingsScreen()
 {
   g_autoSettingsScreen = CreateScreen(true);
 
-  CreateCenteredWhiteLabel(g_autoSettingsScreen, "Auto Settings", LV_ALIGN_TOP_MID, 0, 12);
+  CreateScreenTitle(g_autoSettingsScreen, "Auto Settings");
+
   CreateButton(g_autoSettingsScreen, "Back", 650, 20, 120, 45, AutoSettingsBackButton_Event, NULL);
 
   CreateAutoSettingsSlider(g_autoSettingsScreen, "Run Duration", 85, 1, 300,
@@ -1184,10 +1260,10 @@ static void GigaDisplay_CreateAutoSettingsScreen()
     CreateWhiteLabel(g_autoSettingsScreen, OUTPUT_NAMES[outputIndex], 50, y + 12);
 
     lv_obj_t * modeBtn = CreateButton(g_autoSettingsScreen, "Off", 250, y, 260, 44, AutoOutputModeButton_Event, (void *)(uintptr_t)outputIndex);
-    g_autoOutputModeLabels[outputIndex] = lv_obj_get_child(modeBtn, 0);
+    g_autoOutputModeLabels[outputIndex] = GetButtonLabel(modeBtn);
 
     lv_obj_t * inputBtn = CreateButton(g_autoSettingsScreen, "Input 1", 530, y, 140, 44, AutoOutputInputButton_Event, (void *)(uintptr_t)outputIndex);
-    g_autoOutputInputLabels[outputIndex] = lv_obj_get_child(inputBtn, 0);
+    g_autoOutputInputLabels[outputIndex] = GetButtonLabel(inputBtn);
 
     y += 58;
 
@@ -1342,9 +1418,9 @@ static void GigaDisplay_CreateHitachiScreen()
 {
   g_hitachiScreen = CreateScreen(false);
 
-  CreateCenteredWhiteLabel(g_hitachiScreen, "Hitachi", LV_ALIGN_TOP_MID, 0, 10);
+  CreateScreenTitle(g_hitachiScreen, "Hitachi");
 
-  g_hitachiCurrentOutputLabel = CreateCenteredWhiteLabel(g_hitachiScreen, "Output: 0%", LV_ALIGN_TOP_RIGHT, -30, 14);
+  g_hitachiCurrentOutputLabel = CreateTopRightOutputLabel(g_hitachiScreen);
 
   CreateButton(g_hitachiScreen, "Edit ON", 30, 55, 110, 42, HitachiEditOnButton_Event, NULL);
   CreateButton(g_hitachiScreen, "Edit OFF", 155, 55, 110, 42, HitachiEditOffButton_Event, NULL);
@@ -1378,7 +1454,7 @@ static void GigaDisplay_CreateHitachiScreen()
     &g_hitachiPeriodValueLabel, HitachiSlider_Event);
 
   lv_obj_t * periodModeBtn = CreateButton(g_hitachiScreen, "Period: Precise", 35, 415, 170, 42, HitachiPeriodModeButton_Event, NULL);
-  g_hitachiPeriodModeLabel = lv_obj_get_child(periodModeBtn, 0);
+  g_hitachiPeriodModeLabel = GetButtonLabel(periodModeBtn);
 
   g_hitachiDimmerEnableLabel = CreateCenteredWhiteLabel(g_hitachiScreen, "Dimmer: OFF", LV_ALIGN_BOTTOM_MID, -115, -38);
 
