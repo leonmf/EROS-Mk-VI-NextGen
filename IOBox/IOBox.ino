@@ -339,8 +339,7 @@ boolean UseTimingFunctions[] = {
   false,true};
 boolean DisplayTime[] = {
   false, true};
-bool DisplayDigital[] = {
-  true,true};
+
 
 
 struct hitachi_Settings

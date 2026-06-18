@@ -16,6 +16,61 @@
 */
 
 // ------------------------------------------------------------
+// Future command packet definitions
+//
+// For now these are not used yet.
+// Later these will become the M7-to-M4 command messages.
+// ------------------------------------------------------------
+
+enum EROS_CommandType
+{
+  EROS_CMD_NONE = 0,
+
+  EROS_CMD_SET_MODE,
+
+  EROS_CMD_SET_MANUAL_OUTPUT,
+  EROS_CMD_TOGGLE_MANUAL_OUTPUT,
+
+  EROS_CMD_SET_LOCK,
+  EROS_CMD_TOGGLE_LOCK,
+
+  EROS_CMD_SET_HITACHI_MODE,
+  EROS_CMD_SET_HITACHI_SETPOINT,
+  EROS_CMD_SET_HITACHI_MIN_VALUE,
+  EROS_CMD_SET_HITACHI_MAX_VALUE,
+  EROS_CMD_SET_HITACHI_PERIOD,
+  EROS_CMD_SET_HITACHI_PERIOD_PRECISE,
+  EROS_CMD_TOGGLE_HITACHI_PERIOD_PRECISE,
+  EROS_CMD_SET_HITACHI_MIN_RELAY_VALUE,
+
+  EROS_CMD_AUTO_START,
+  EROS_CMD_AUTO_STOP,
+  EROS_CMD_AUTO_PAUSE,
+
+  EROS_CMD_SET_AUTO_RUN_DURATION_MINUTES,
+  EROS_CMD_SET_AUTO_PAUSE_DURATION_SECONDS,
+  EROS_CMD_SET_AUTO_PENALTY_DURATION_SECONDS,
+  EROS_CMD_SET_AUTO_IO_ON_TIME_MS,
+  EROS_CMD_SET_AUTO_IO_OFF_TIME_MS,
+  EROS_CMD_SET_AUTO_OUTPUT_MODE,
+  EROS_CMD_SET_AUTO_OUTPUT_INPUT_INDEX,
+
+  EROS_CMD_REQUEST_SETTINGS_SAVE,
+  EROS_CMD_REQUEST_SETTINGS_LOAD
+};
+
+struct EROS_Command
+{
+  EROS_CommandType type;
+
+  int index;
+  int value;
+
+  bool boolValue;
+  bool onSettings;
+};
+
+// ------------------------------------------------------------
 // Control status snapshot
 //
 // For now this is refreshed from the existing globals.
@@ -39,6 +94,8 @@ struct EROS_ControlStatus
 };
 
 static EROS_ControlStatus g_controlStatus;
+
+void Command_Execute(const EROS_Command & command);
 
 void State_RefreshControlStatus()
 {
@@ -126,7 +183,7 @@ bool State_GetManualOutputRequest(int outputIndex)
   return Manual.out[outputIndex];
 }
 
-void Command_SetManualOutput(int outputIndex, bool state)
+static void Command_ApplySetManualOutput(int outputIndex, bool state)
 {
   if (outputIndex < 0 || outputIndex >= OutSize) {
     return;
@@ -141,7 +198,7 @@ void Command_SetManualOutput(int outputIndex, bool state)
   Manual.out[outputIndex] = state;
 }
 
-void Command_ToggleManualOutput(int outputIndex)
+static void Command_ApplyToggleManualOutput(int outputIndex)
 {
   if (outputIndex < 0 || outputIndex >= OutSize) {
     return;
@@ -152,7 +209,33 @@ void Command_ToggleManualOutput(int outputIndex)
     return;
   }
 
-  Command_SetManualOutput(outputIndex, !Manual.out[outputIndex]);
+  Command_ApplySetManualOutput(outputIndex, !Manual.out[outputIndex]);
+}
+
+void Command_SetManualOutput(int outputIndex, bool state)
+{
+  EROS_Command command;
+
+  command.type = EROS_CMD_SET_MANUAL_OUTPUT;
+  command.index = outputIndex;
+  command.value = 0;
+  command.boolValue = state;
+  command.onSettings = false;
+
+  Command_Execute(command);
+}
+
+void Command_ToggleManualOutput(int outputIndex)
+{
+  EROS_Command command;
+
+  command.type = EROS_CMD_TOGGLE_MANUAL_OUTPUT;
+  command.index = outputIndex;
+  command.value = 0;
+  command.boolValue = false;
+  command.onSettings = false;
+
+  Command_Execute(command);
 }
 
 void Command_SetLock(bool state)
@@ -572,4 +655,28 @@ void Command_ForceFixedAutoOutputModes()
 
   // Dimmer relay is automatic and should not be user-configured.
   EROSFlexSettings.OutMode[OUT_DIMMER_ENABLE] = 0;
+}
+
+// ------------------------------------------------------------
+// Command execution
+//
+// For now this runs immediately on the same core.
+// Later this function will be replaced by M7-to-M4 command transport.
+// ------------------------------------------------------------
+
+void Command_Execute(const EROS_Command & command)
+{
+  switch (command.type)
+  {
+    case EROS_CMD_SET_MANUAL_OUTPUT:
+      Command_ApplySetManualOutput(command.index, command.boolValue);
+      break;
+
+    case EROS_CMD_TOGGLE_MANUAL_OUTPUT:
+      Command_ApplyToggleManualOutput(command.index);
+      break;
+
+    default:
+      break;
+  }
 }

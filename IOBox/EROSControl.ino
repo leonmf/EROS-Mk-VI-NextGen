@@ -139,11 +139,6 @@ void RunMode()
     CheckRunButton(TimeVar.StartButton);
   }
   
-  if (DisplayDigital[Mode.Current])
-  {
-    DisplayIO(5, InitIODisplay);
-  }
-  InitIODisplay = false; 
 
   SetOutputs();
 }
