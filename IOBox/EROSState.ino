@@ -212,6 +212,21 @@ static void Command_ApplyToggleManualOutput(int outputIndex)
   Command_ApplySetManualOutput(outputIndex, !Manual.out[outputIndex]);
 }
 
+static void Command_ApplySetLock(bool state)
+{
+  OutValues[OUT_LOCK_1] = state;
+  OutValues[OUT_LOCK_2] = state;
+
+  Manual.out[OUT_LOCK_1] = state;
+  Manual.out[OUT_LOCK_2] = state;
+}
+
+static void Command_ApplyToggleLock()
+{
+  bool newState = !(OutValues[OUT_LOCK_1] || OutValues[OUT_LOCK_2]);
+  Command_ApplySetLock(newState);
+}
+
 void Command_SetManualOutput(int outputIndex, bool state)
 {
   EROS_Command command;
@@ -240,17 +255,28 @@ void Command_ToggleManualOutput(int outputIndex)
 
 void Command_SetLock(bool state)
 {
-  OutValues[OUT_LOCK_1] = state;
-  OutValues[OUT_LOCK_2] = state;
+  EROS_Command command;
 
-  Manual.out[OUT_LOCK_1] = state;
-  Manual.out[OUT_LOCK_2] = state;
+  command.type = EROS_CMD_SET_LOCK;
+  command.index = 0;
+  command.value = 0;
+  command.boolValue = state;
+  command.onSettings = false;
+
+  Command_Execute(command);
 }
 
 void Command_ToggleLock()
 {
-  bool newState = !(OutValues[OUT_LOCK_1] || OutValues[OUT_LOCK_2]);
-  Command_SetLock(newState);
+  EROS_Command command;
+
+  command.type = EROS_CMD_TOGGLE_LOCK;
+  command.index = 0;
+  command.value = 0;
+  command.boolValue = false;
+  command.onSettings = false;
+
+  Command_Execute(command);
 }
 
 // ------------------------------------------------------------
@@ -279,9 +305,22 @@ void Command_ToggleDimmerEnabledRequest()
 // Mode commands
 // ------------------------------------------------------------
 
-void Command_SetMode(byte mode)
+static void Command_ApplySetMode(byte mode)
 {
   Mode.Current = mode;
+}
+
+void Command_SetMode(byte mode)
+{
+  EROS_Command command;
+
+  command.type = EROS_CMD_SET_MODE;
+  command.index = 0;
+  command.value = mode;
+  command.boolValue = false;
+  command.onSettings = false;
+
+  Command_Execute(command);
 }
 
 byte State_GetMode()
@@ -668,12 +707,24 @@ void Command_Execute(const EROS_Command & command)
 {
   switch (command.type)
   {
+    case EROS_CMD_SET_MODE:
+      Command_ApplySetMode((byte)command.value);
+      break;
+
     case EROS_CMD_SET_MANUAL_OUTPUT:
       Command_ApplySetManualOutput(command.index, command.boolValue);
       break;
 
     case EROS_CMD_TOGGLE_MANUAL_OUTPUT:
       Command_ApplyToggleManualOutput(command.index);
+      break;
+
+    case EROS_CMD_SET_LOCK:
+      Command_ApplySetLock(command.boolValue);
+      break;
+
+    case EROS_CMD_TOGGLE_LOCK:
+      Command_ApplyToggleLock();
       break;
 
     default:
