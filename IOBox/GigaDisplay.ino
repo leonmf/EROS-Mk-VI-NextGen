@@ -148,9 +148,12 @@ static bool g_hitachiScreenBuilt = false;
 static bool g_hitachiRelayMinScreenBuilt = false;
 
 static bool g_hitachiEditingOnSettings = true;
+static bool g_manualSkipNextAutoRefresh = false;
+static bool g_autoSkipNextAutoRefresh = false;
 static bool g_hitachiUiRefreshing = false;
 static bool g_hitachiSkipNextAutoRefresh = false;
 static bool g_hitachiPeriodPreciseMode = true;
+static int g_hitachiRelayMinUiValue = 25;
 
 
 // ------------------------------------------------------------
@@ -274,6 +277,7 @@ static void GigaDisplay_DestroyHitachiScreen();
 static void GigaDisplay_UpdateHitachiScreen();
 static void GigaDisplay_UpdateHitachiSliderLabelsFromWidgets();
 static void GigaDisplay_UpdateHitachiRelayMinScreen();
+static void GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue();
 static void GigaDisplay_UpdateAutoScreen();
 static void GigaDisplay_UpdateAutoSettingsScreen();
 static void GigaDisplay_UpdateAutoSettingsSliderLabelsFromWidgets();
@@ -694,11 +698,27 @@ void GigaDisplay_Task()
   //Serial.println("Timer Handler");
 
   if (lv_scr_act() == g_manualScreen) {
-    GigaDisplay_UpdateManualIndicators();
+    if (g_manualSkipNextAutoRefresh) {
+      // A manual output callback just queued a command.
+      // Skip this one automatic refresh so the UI does not redraw from the
+      // previous status snapshot before loop() drains the command queue.
+      g_manualSkipNextAutoRefresh = false;
+    }
+    else {
+      GigaDisplay_UpdateManualIndicators();
+    }
     //Serial.println("Manual Screen");
   }
   else if (lv_scr_act() == g_autoScreen) {
-    GigaDisplay_UpdateAutoScreen();
+    if (g_autoSkipNextAutoRefresh) {
+      // An Auto button callback just queued a command.
+      // Skip this one automatic refresh so the UI does not redraw from the
+      // previous status snapshot before loop() drains the command queue.
+      g_autoSkipNextAutoRefresh = false;
+    }
+    else {
+      GigaDisplay_UpdateAutoScreen();
+    }
     //Serial.println("Auto Screen");
   }
   else if (lv_scr_act() == g_hitachiScreen) {
@@ -1631,8 +1651,18 @@ static void GigaDisplay_UpdateHitachiRelayMinScreen()
     return;
   }
 
+  g_hitachiRelayMinUiValue = constrain(State_GetHitachiMinRelayValue(), 1, 100);
+  GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue();
+}
+
+static void GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue()
+{
+  if (g_hitachiRelayMinValueLabel == NULL) {
+    return;
+  }
+
   char buffer[32];
-  snprintf(buffer, sizeof(buffer), "Min: %d%%", State_GetHitachiMinRelayValue());
+  snprintf(buffer, sizeof(buffer), "Min: %d%%", g_hitachiRelayMinUiValue);
   lv_label_set_text(g_hitachiRelayMinValueLabel, buffer);
 }
 
@@ -1662,19 +1692,34 @@ static void AutoStartButton_Event(lv_event_t * e)
 {
   Command_SetMode(EROSFlexMode);
   Command_RequestAutoStart();
-  GigaDisplay_UpdateAutoScreen();
+
+  if (g_autoStatusLabel != NULL) {
+    lv_label_set_text(g_autoStatusLabel, "Status: Start Requested");
+  }
+
+  g_autoSkipNextAutoRefresh = true;
 }
 
 static void AutoStopButton_Event(lv_event_t * e)
 {
   Command_RequestAutoStop();
-  GigaDisplay_UpdateAutoScreen();
+
+  if (g_autoStatusLabel != NULL) {
+    lv_label_set_text(g_autoStatusLabel, "Status: Stop Requested");
+  }
+
+  g_autoSkipNextAutoRefresh = true;
 }
 
 static void AutoPauseButton_Event(lv_event_t * e)
 {
   Command_RequestAutoPause();
-  GigaDisplay_UpdateAutoScreen();
+
+  if (g_autoStatusLabel != NULL) {
+    lv_label_set_text(g_autoStatusLabel, "Status: Pause Requested");
+  }
+
+  g_autoSkipNextAutoRefresh = true;
 }
 
 static void AutoBackButton_Event(lv_event_t * e)
@@ -1693,15 +1738,27 @@ static void OutputToggle_Event(lv_event_t * e)
   int outputIdx = MANUAL_BUTTON_OUTPUT_INDEX[buttonIdx];
 
   if (outputIdx == OUT_LOCK_1) {
+    bool newState = !(State_GetOutput(OUT_LOCK_1) || State_GetOutput(OUT_LOCK_2));
     Command_ToggleLock();
+    SetIndicatorState(g_outputIndicators[OUT_LOCK_1], newState);
+    SetValueLabel(g_outputValueLabels[OUT_LOCK_1], newState);
+    SetIndicatorState(g_outputIndicators[OUT_LOCK_2], newState);
+    SetValueLabel(g_outputValueLabels[OUT_LOCK_2], newState);
   }
   else if (outputIdx == OUT_HITACHI_VIRTUAL) {
     Command_ToggleHitachiVirtualRequest();
   }
   else {
+    bool newState = !State_GetOutput(outputIdx);
     Command_ToggleManualOutput(outputIdx);
+
+    if (outputIdx >= 0 && outputIdx < PhysicalOutSize) {
+      SetIndicatorState(g_outputIndicators[outputIdx], newState);
+      SetValueLabel(g_outputValueLabels[outputIdx], newState);
+    }
   }
-  GigaDisplay_UpdateManualIndicators();
+
+  g_manualSkipNextAutoRefresh = true;
 }
 
 static void AutoSettingsButton_Event(lv_event_t * e)
@@ -1823,9 +1880,14 @@ static void HitachiModeButton_Event(lv_event_t * e)
     return;
   }
 
-  Command_SetHitachiMode(g_hitachiEditingOnSettings, HITACHI_MODE_VALUES[modeIdx]);
+  int mode = HITACHI_MODE_VALUES[modeIdx];
+  Command_SetHitachiMode(g_hitachiEditingOnSettings, mode);
 
-  GigaDisplay_UpdateHitachiScreen();
+  char buffer[32];
+  snprintf(buffer, sizeof(buffer), "Mode: %s", Hitachi_GetModeName(mode));
+  lv_label_set_text(g_hitachiModeLabel, buffer);
+
+  g_hitachiSkipNextAutoRefresh = true;
 }
 
 static void HitachiSlider_Event(lv_event_t * e)
@@ -1870,8 +1932,16 @@ static void HitachiSlider_Event(lv_event_t * e)
 
 static void HitachiPeriodModeButton_Event(lv_event_t * e)
 {
-  Command_ToggleHitachiPeriodPrecise(g_hitachiEditingOnSettings);
-  GigaDisplay_UpdateHitachiScreen();
+  g_hitachiPeriodPreciseMode = !g_hitachiPeriodPreciseMode;
+  Command_SetHitachiPeriodPrecise(g_hitachiEditingOnSettings, g_hitachiPeriodPreciseMode);
+
+  lv_label_set_text(
+    g_hitachiPeriodModeLabel,
+    g_hitachiPeriodPreciseMode ? "Period: Precise" : "Period: Coarse"
+  );
+
+  GigaDisplay_UpdateHitachiSliderLabelsFromWidgets();
+  g_hitachiSkipNextAutoRefresh = true;
 }
 
 static void HitachiRelayMinButton_Event(lv_event_t * e)
@@ -1881,32 +1951,35 @@ static void HitachiRelayMinButton_Event(lv_event_t * e)
 
 static void HitachiRelayMinMinusButton_Event(lv_event_t * e)
 {
-  Command_AdjustHitachiMinRelayValue(-1);
-  GigaDisplay_UpdateHitachiRelayMinScreen();
+  g_hitachiRelayMinUiValue = constrain(g_hitachiRelayMinUiValue - 1, 1, 100);
+  Command_SetHitachiMinRelayValue(g_hitachiRelayMinUiValue);
+  GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue();
 }
 
 static void HitachiRelayMinPlusButton_Event(lv_event_t * e)
 {
-  Command_AdjustHitachiMinRelayValue(1);
-  GigaDisplay_UpdateHitachiRelayMinScreen();
+  g_hitachiRelayMinUiValue = constrain(g_hitachiRelayMinUiValue + 1, 1, 100);
+  Command_SetHitachiMinRelayValue(g_hitachiRelayMinUiValue);
+  GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue();
 }
 
 static void HitachiRelayMinMinus5Button_Event(lv_event_t * e)
 {
-  Command_AdjustHitachiMinRelayValue(-5);
-  GigaDisplay_UpdateHitachiRelayMinScreen();
+  g_hitachiRelayMinUiValue = constrain(g_hitachiRelayMinUiValue - 5, 1, 100);
+  Command_SetHitachiMinRelayValue(g_hitachiRelayMinUiValue);
+  GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue();
 }
 
 static void HitachiRelayMinPlus5Button_Event(lv_event_t * e)
 {
-  Command_AdjustHitachiMinRelayValue(5);
-  GigaDisplay_UpdateHitachiRelayMinScreen();
+  g_hitachiRelayMinUiValue = constrain(g_hitachiRelayMinUiValue + 5, 1, 100);
+  Command_SetHitachiMinRelayValue(g_hitachiRelayMinUiValue);
+  GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue();
 }
 
 static void HitachiRelayMinBackButton_Event(lv_event_t * e)
 {
   if (g_previousScreenBeforeRelayMin != NULL) {
-    GigaDisplay_UpdateHitachiScreen();
     lv_scr_load(g_previousScreenBeforeRelayMin);
   }
   else {
