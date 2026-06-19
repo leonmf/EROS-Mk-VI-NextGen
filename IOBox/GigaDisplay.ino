@@ -155,6 +155,7 @@ static bool g_hitachiSkipNextAutoRefresh = false;
 static bool g_hitachiPeriodPreciseMode = true;
 static int g_hitachiRelayMinUiValue = 25;
 static unsigned long g_lastDisplayedSettingsResultCounter = 0;
+static unsigned long g_lastDisplayedTransportCommandFailCounter = 0;
 
 
 // ------------------------------------------------------------
@@ -285,6 +286,7 @@ static void GigaDisplay_UpdateAutoSettingsSliderLabelsFromWidgets();
 static void GigaDisplay_UpdateAutoOutputModeLabel(int outputIndex, byte mode);
 static void GigaDisplay_UpdateAutoOutputInputLabel(int outputIndex, int inputIndex);
 static void GigaDisplay_UpdateIdleSettingsResult();
+static void GigaDisplay_UpdateIdleTransportHealth();
 
 static void ManualButton_Event(lv_event_t * e);
 static void AutoButton_Event(lv_event_t * e);
@@ -692,6 +694,19 @@ static void GigaDisplay_UpdateIdleSettingsResult()
   }
 }
 
+static void GigaDisplay_UpdateIdleTransportHealth()
+{
+  unsigned long failCounter = State_GetTransportCommandSendFailedCounter();
+
+  if (failCounter == g_lastDisplayedTransportCommandFailCounter)
+  {
+    return;
+  }
+
+  g_lastDisplayedTransportCommandFailCounter = failCounter;
+  SetIdleStatusText("Command send failed");
+}
+
 // ------------------------------------------------------------
 // Public display setup / task functions
 // ------------------------------------------------------------
@@ -735,6 +750,7 @@ void GigaDisplay_Task()
 
   if (lv_scr_act() == g_idleScreen) {
     GigaDisplay_UpdateIdleSettingsResult();
+    GigaDisplay_UpdateIdleTransportHealth();
   }
 
   if (lv_scr_act() == g_manualScreen) {

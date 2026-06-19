@@ -16,6 +16,11 @@
 
 static EROS_ControlStatus g_m7ControlStatus;
 
+static unsigned long g_m7LastStatusReceiveMillis = 0;
+static unsigned long g_m7TransportCommandSendAttemptCounter = 0;
+static unsigned long g_m7TransportCommandSendAcceptedCounter = 0;
+static unsigned long g_m7TransportCommandSendFailedCounter = 0;
+
 bool EROSTransport_SendCommandToM4(const EROS_Command & command);
 void State_ProcessPendingCommands();
 
@@ -24,7 +29,18 @@ void State_ProcessPendingCommands();
 // M7-to-M4 command send boundary.
 bool Command_SubmitToControl(const EROS_Command & command)
 {
-  return EROSTransport_SendCommandToM4(command);
+  g_m7TransportCommandSendAttemptCounter++;
+
+  bool accepted = EROSTransport_SendCommandToM4(command);
+
+  if (accepted) {
+    g_m7TransportCommandSendAcceptedCounter++;
+  }
+  else {
+    g_m7TransportCommandSendFailedCounter++;
+  }
+
+  return accepted;
 }
 
 static void Command_Send(
@@ -56,6 +72,7 @@ static void Command_Send(
 void State_ApplyControlStatus(const EROS_ControlStatus & status)
 {
   g_m7ControlStatus = status;
+  g_m7LastStatusReceiveMillis = millis();
 }
 
 bool State_GetInput(int inputIndex)
@@ -446,5 +463,66 @@ bool State_GetSettingsLastOk()
 unsigned long State_GetSettingsResultCounter()
 {
   return g_m7ControlStatus.settingsResultCounter;
+}
+
+
+unsigned long State_GetTransportStatusCounter()
+{
+  return g_m7ControlStatus.transportStatusCounter;
+}
+
+unsigned long State_GetTransportStatusAgeMs()
+{
+  if (g_m7LastStatusReceiveMillis == 0)
+  {
+    return 0xFFFFFFFFUL;
+  }
+
+  return millis() - g_m7LastStatusReceiveMillis;
+}
+
+unsigned long State_GetTransportStatusPublishMillis()
+{
+  return g_m7ControlStatus.transportStatusMillis;
+}
+
+unsigned long State_GetTransportCommandAcceptedCounter()
+{
+  return g_m7ControlStatus.transportCommandAcceptedCounter;
+}
+
+unsigned long State_GetTransportCommandRejectedCounter()
+{
+  return g_m7ControlStatus.transportCommandRejectedCounter;
+}
+
+byte State_GetTransportCommandQueueDepth()
+{
+  return g_m7ControlStatus.transportCommandQueueDepth;
+}
+
+byte State_GetTransportCommandQueueCapacity()
+{
+  return g_m7ControlStatus.transportCommandQueueCapacity;
+}
+
+unsigned long State_GetTransportCommandSendAttemptCounter()
+{
+  return g_m7TransportCommandSendAttemptCounter;
+}
+
+unsigned long State_GetTransportCommandSendAcceptedCounter()
+{
+  return g_m7TransportCommandSendAcceptedCounter;
+}
+
+unsigned long State_GetTransportCommandSendFailedCounter()
+{
+  return g_m7TransportCommandSendFailedCounter;
+}
+
+bool State_IsTransportStatusFresh(unsigned long maxAgeMs)
+{
+  return State_GetTransportStatusAgeMs() <= maxAgeMs;
 }
 

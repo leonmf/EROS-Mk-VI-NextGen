@@ -199,6 +199,15 @@ struct EROS_ControlStatus
 
   int hitachiMinRelayValue;
 
+  // Transport health fields.
+  // These are populated by the control side and read by the UI side.
+  unsigned long transportStatusCounter;
+  unsigned long transportStatusMillis;
+  unsigned long transportCommandAcceptedCounter;
+  unsigned long transportCommandRejectedCounter;
+  byte transportCommandQueueDepth;
+  byte transportCommandQueueCapacity;
+
   byte settingsLastAction;
   bool settingsLastOk;
   int settingsLastError;

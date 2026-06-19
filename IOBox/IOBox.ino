@@ -77,6 +77,20 @@ int State_GetSettingsLastError();
 byte State_GetSettingsLastAction();
 bool State_GetSettingsLastOk();
 unsigned long State_GetSettingsResultCounter();
+
+// Transport health
+unsigned long State_GetTransportStatusCounter();
+unsigned long State_GetTransportStatusAgeMs();
+unsigned long State_GetTransportStatusPublishMillis();
+unsigned long State_GetTransportCommandAcceptedCounter();
+unsigned long State_GetTransportCommandRejectedCounter();
+byte State_GetTransportCommandQueueDepth();
+byte State_GetTransportCommandQueueCapacity();
+unsigned long State_GetTransportCommandSendAttemptCounter();
+unsigned long State_GetTransportCommandSendAcceptedCounter();
+unsigned long State_GetTransportCommandSendFailedCounter();
+bool State_IsTransportStatusFresh(unsigned long maxAgeMs);
+
 void Command_RequestSettingsSave();
 void Command_RequestSettingsLoad();
 

@@ -24,6 +24,10 @@ static bool g_settingsLastOk = true;
 static int g_bridgeSettingsLastError = 0;
 static unsigned long g_settingsResultCounter = 0;
 
+static unsigned long g_m4TransportStatusCounter = 0;
+static unsigned long g_m4TransportCommandAcceptedCounter = 0;
+static unsigned long g_m4TransportCommandRejectedCounter = 0;
+
 void EROSTransport_PublishStatusToM7(const EROS_ControlStatus & status);
 void Command_Execute(const EROS_Command & command);
 void Command_NormalizeHitachiSettings();
@@ -82,7 +86,22 @@ static bool Command_QueuePop(EROS_Command & command)
 // becomes the M4-side receive handler for M7 command packets.
 bool EROSM4_ReceiveCommandFromTransport(const EROS_Command & command)
 {
-  return Command_QueuePush(command);
+  bool accepted = Command_QueuePush(command);
+
+  if (accepted)
+  {
+    g_m4TransportCommandAcceptedCounter++;
+  }
+  else
+  {
+    g_m4TransportCommandRejectedCounter++;
+
+    // Publish the failure counter immediately so the UI side can report a
+    // rejected command even if no command was processed in this loop.
+    State_RefreshControlStatus();
+  }
+
+  return accepted;
 }
 
 void State_ProcessPendingCommands()
@@ -191,6 +210,15 @@ void State_RefreshControlStatus()
   g_controlStatus.hitachiPeriodPreciseOff = hS.periodPreciseOff;
 
   g_controlStatus.hitachiMinRelayValue = hS.minRelayValue;
+
+  g_m4TransportStatusCounter++;
+
+  g_controlStatus.transportStatusCounter = g_m4TransportStatusCounter;
+  g_controlStatus.transportStatusMillis = millis();
+  g_controlStatus.transportCommandAcceptedCounter = g_m4TransportCommandAcceptedCounter;
+  g_controlStatus.transportCommandRejectedCounter = g_m4TransportCommandRejectedCounter;
+  g_controlStatus.transportCommandQueueDepth = (byte)g_commandQueueCount;
+  g_controlStatus.transportCommandQueueCapacity = (byte)EROS_COMMAND_QUEUE_SIZE;
 
   g_controlStatus.settingsLastAction = g_settingsLastAction;
   g_controlStatus.settingsLastOk = g_settingsLastOk;
