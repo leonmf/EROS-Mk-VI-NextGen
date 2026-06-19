@@ -90,6 +90,13 @@ unsigned long State_GetTransportCommandSendAttemptCounter();
 unsigned long State_GetTransportCommandSendAcceptedCounter();
 unsigned long State_GetTransportCommandSendFailedCounter();
 bool State_IsTransportStatusFresh(unsigned long maxAgeMs);
+void Command_RequestTransportLoopbackPing();
+unsigned long State_GetTransportLoopbackRequestCounter();
+unsigned long State_GetTransportLoopbackRequestId();
+unsigned long State_GetTransportLoopbackEchoId();
+unsigned long State_GetTransportLoopbackEchoCounter();
+unsigned long State_GetTransportLoopbackEchoAgeMs();
+bool State_GetTransportLoopbackOk();
 
 void Command_RequestSettingsSave();
 void Command_RequestSettingsLoad();

@@ -132,7 +132,9 @@ enum EROS_CommandType
   EROS_CMD_SET_AUTO_OUTPUT_INPUT_INDEX,
 
   EROS_CMD_REQUEST_SETTINGS_SAVE,
-  EROS_CMD_REQUEST_SETTINGS_LOAD
+  EROS_CMD_REQUEST_SETTINGS_LOAD,
+
+  EROS_CMD_TRANSPORT_LOOPBACK_PING
 };
 
 struct EROS_Command
@@ -205,6 +207,10 @@ struct EROS_ControlStatus
   unsigned long transportStatusMillis;
   unsigned long transportCommandAcceptedCounter;
   unsigned long transportCommandRejectedCounter;
+  unsigned long transportLoopbackRequestId;
+  unsigned long transportLoopbackEchoId;
+  unsigned long transportLoopbackEchoCounter;
+  unsigned long transportLoopbackEchoMillis;
   byte transportCommandQueueDepth;
   byte transportCommandQueueCapacity;
 

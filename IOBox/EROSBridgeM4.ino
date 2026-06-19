@@ -27,6 +27,10 @@ static unsigned long g_settingsResultCounter = 0;
 static unsigned long g_m4TransportStatusCounter = 0;
 static unsigned long g_m4TransportCommandAcceptedCounter = 0;
 static unsigned long g_m4TransportCommandRejectedCounter = 0;
+static unsigned long g_m4TransportLoopbackRequestId = 0;
+static unsigned long g_m4TransportLoopbackEchoId = 0;
+static unsigned long g_m4TransportLoopbackEchoCounter = 0;
+static unsigned long g_m4TransportLoopbackEchoMillis = 0;
 
 void EROSTransport_PublishStatusToM7(const EROS_ControlStatus & status);
 void Command_Execute(const EROS_Command & command);
@@ -217,6 +221,10 @@ void State_RefreshControlStatus()
   g_controlStatus.transportStatusMillis = millis();
   g_controlStatus.transportCommandAcceptedCounter = g_m4TransportCommandAcceptedCounter;
   g_controlStatus.transportCommandRejectedCounter = g_m4TransportCommandRejectedCounter;
+  g_controlStatus.transportLoopbackRequestId = g_m4TransportLoopbackRequestId;
+  g_controlStatus.transportLoopbackEchoId = g_m4TransportLoopbackEchoId;
+  g_controlStatus.transportLoopbackEchoCounter = g_m4TransportLoopbackEchoCounter;
+  g_controlStatus.transportLoopbackEchoMillis = g_m4TransportLoopbackEchoMillis;
   g_controlStatus.transportCommandQueueDepth = (byte)g_commandQueueCount;
   g_controlStatus.transportCommandQueueCapacity = (byte)EROS_COMMAND_QUEUE_SIZE;
 
@@ -396,6 +404,14 @@ static void Command_ApplyAutoStop()
 static void Command_ApplyAutoPause()
 {
   SoftSwitches.Pause = true;
+}
+
+static void Command_ApplyTransportLoopbackPing(unsigned long requestId)
+{
+  g_m4TransportLoopbackRequestId = requestId;
+  g_m4TransportLoopbackEchoId = requestId;
+  g_m4TransportLoopbackEchoCounter++;
+  g_m4TransportLoopbackEchoMillis = millis();
 }
 
 static void Command_ApplySetAutoRunDurationMinutes(unsigned int minutes)
@@ -596,6 +612,10 @@ void Command_Execute(const EROS_Command & command)
 
     case EROS_CMD_REQUEST_SETTINGS_LOAD:
       Command_ApplySettingsLoad();
+      break;
+
+    case EROS_CMD_TRANSPORT_LOOPBACK_PING:
+      Command_ApplyTransportLoopbackPing((unsigned long)command.value);
       break;
 
     default:

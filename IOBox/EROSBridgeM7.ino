@@ -20,6 +20,7 @@ static unsigned long g_m7LastStatusReceiveMillis = 0;
 static unsigned long g_m7TransportCommandSendAttemptCounter = 0;
 static unsigned long g_m7TransportCommandSendAcceptedCounter = 0;
 static unsigned long g_m7TransportCommandSendFailedCounter = 0;
+static unsigned long g_m7TransportLoopbackRequestCounter = 0;
 
 bool EROSTransport_SendCommandToM4(const EROS_Command & command);
 void State_ProcessPendingCommands();
@@ -447,6 +448,48 @@ void Command_RequestSettingsSave()
 void Command_RequestSettingsLoad()
 {
   Command_Send(EROS_CMD_REQUEST_SETTINGS_LOAD);
+}
+
+void Command_RequestTransportLoopbackPing()
+{
+  g_m7TransportLoopbackRequestCounter++;
+  Command_Send(EROS_CMD_TRANSPORT_LOOPBACK_PING, 0, g_m7TransportLoopbackRequestCounter);
+}
+
+unsigned long State_GetTransportLoopbackRequestCounter()
+{
+  return g_m7TransportLoopbackRequestCounter;
+}
+
+unsigned long State_GetTransportLoopbackRequestId()
+{
+  return g_m7ControlStatus.transportLoopbackRequestId;
+}
+
+unsigned long State_GetTransportLoopbackEchoId()
+{
+  return g_m7ControlStatus.transportLoopbackEchoId;
+}
+
+unsigned long State_GetTransportLoopbackEchoCounter()
+{
+  return g_m7ControlStatus.transportLoopbackEchoCounter;
+}
+
+unsigned long State_GetTransportLoopbackEchoAgeMs()
+{
+  if (g_m7ControlStatus.transportLoopbackEchoCounter == 0)
+  {
+    return 0xFFFFFFFFUL;
+  }
+
+  return millis() - g_m7ControlStatus.transportLoopbackEchoMillis;
+}
+
+bool State_GetTransportLoopbackOk()
+{
+  return (g_m7TransportLoopbackRequestCounter > 0) &&
+         (g_m7ControlStatus.transportLoopbackEchoId == g_m7TransportLoopbackRequestCounter);
 }
 
 

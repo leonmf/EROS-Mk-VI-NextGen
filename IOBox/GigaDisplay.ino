@@ -8,7 +8,7 @@
     - Manual screen
     - Hitachi screen
 
-  This version uses the EROSState.ino command/state interface instead of
+  This version uses the EROSBridgeM7.ino command/state interface instead of
   directly poking most IO/control globals from the display layer.
 
   Main screen:
@@ -66,7 +66,7 @@ static lv_obj_t * g_idleStatusLabel = NULL;
 // ------------------------------------------------------------
 // Status / debug screen widgets
 // ------------------------------------------------------------
-#define STATUS_DEBUG_ROW_COUNT 12
+#define STATUS_DEBUG_ROW_COUNT 16
 
 static lv_obj_t * g_statusDebugValueLabels[STATUS_DEBUG_ROW_COUNT];
 
@@ -324,6 +324,7 @@ static void SaveSettingsButton_Event(lv_event_t * e);
 static void LoadSettingsButton_Event(lv_event_t * e);
 static void StatusButton_Event(lv_event_t * e);
 static void StatusBackButton_Event(lv_event_t * e);
+static void StatusPingButton_Event(lv_event_t * e);
 
 static void AutoStartButton_Event(lv_event_t * e);
 static void AutoStopButton_Event(lv_event_t * e);
@@ -923,8 +924,8 @@ static lv_obj_t * GigaDisplay_CreateStatusDebugRow(int row, const char * labelTe
 {
   const int leftX = 55;
   const int valueX = 430;
-  const int startY = 72;
-  const int rowH = 27;
+  const int startY = 58;
+  const int rowH = 22;
   int y = startY + (row * rowH);
 
   CreateWhiteLabel(g_statusScreen, labelText, leftX, y);
@@ -936,6 +937,7 @@ static void GigaDisplay_CreateStatusScreen()
   g_statusScreen = CreateScreen(false);
 
   CreateScreenTitle(g_statusScreen, "Status / Transport Debug");
+  CreateAlignedButton(g_statusScreen, "Ping", LV_ALIGN_BOTTOM_LEFT, 30, -25, 130, 50, StatusPingButton_Event, NULL);
   CreateAlignedButton(g_statusScreen, "Back", LV_ALIGN_BOTTOM_RIGHT, -30, -25, 130, 50, StatusBackButton_Event, NULL);
 
   g_statusDebugValueLabels[0] = GigaDisplay_CreateStatusDebugRow(0, "Status packets");
@@ -950,6 +952,10 @@ static void GigaDisplay_CreateStatusScreen()
   g_statusDebugValueLabels[9] = GigaDisplay_CreateStatusDebugRow(9, "M4 queue depth");
   g_statusDebugValueLabels[10] = GigaDisplay_CreateStatusDebugRow(10, "M4 queue capacity");
   g_statusDebugValueLabels[11] = GigaDisplay_CreateStatusDebugRow(11, "Settings result count");
+  g_statusDebugValueLabels[12] = GigaDisplay_CreateStatusDebugRow(12, "Loopback sent count");
+  g_statusDebugValueLabels[13] = GigaDisplay_CreateStatusDebugRow(13, "Loopback M4 request id");
+  g_statusDebugValueLabels[14] = GigaDisplay_CreateStatusDebugRow(14, "Loopback echo id/count");
+  g_statusDebugValueLabels[15] = GigaDisplay_CreateStatusDebugRow(15, "Loopback ok / age ms");
 
   g_statusScreenBuilt = true;
 }
@@ -1022,6 +1028,22 @@ static void GigaDisplay_UpdateStatusScreen()
 
   snprintf(buffer, sizeof(buffer), "%lu", State_GetSettingsResultCounter());
   GigaDisplay_SetStatusDebugValue(11, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportLoopbackRequestCounter());
+  GigaDisplay_SetStatusDebugValue(12, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportLoopbackRequestId());
+  GigaDisplay_SetStatusDebugValue(13, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu / %lu",
+           State_GetTransportLoopbackEchoId(),
+           State_GetTransportLoopbackEchoCounter());
+  GigaDisplay_SetStatusDebugValue(14, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%s / %lu",
+           State_GetTransportLoopbackOk() ? "OK" : "WAIT",
+           State_GetTransportLoopbackEchoAgeMs());
+  GigaDisplay_SetStatusDebugValue(15, buffer);
 }
 
 // ------------------------------------------------------------
@@ -1863,6 +1885,12 @@ static void StatusButton_Event(lv_event_t * e)
 static void StatusBackButton_Event(lv_event_t * e)
 {
   GigaDisplay_ShowIdleScreen();
+}
+
+static void StatusPingButton_Event(lv_event_t * e)
+{
+  Command_RequestTransportLoopbackPing();
+  GigaDisplay_UpdateStatusScreen();
 }
 
 static void ManualButton_Event(lv_event_t * e)
