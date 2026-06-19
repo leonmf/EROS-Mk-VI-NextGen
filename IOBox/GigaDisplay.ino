@@ -108,6 +108,9 @@ static lv_obj_t * g_autoOffTimeValueLabel = NULL;
 
 static lv_obj_t * g_autoOutputModeLabels[OutSize];
 static lv_obj_t * g_autoOutputInputLabels[OutSize];
+static byte g_autoOutputModeUiValue[OutSize];
+static int g_autoOutputInputUiIndex[OutSize];
+static bool g_autoSettingsUiRefreshing = false;
 
 // ------------------------------------------------------------
 // Hitachi screen widgets
@@ -273,6 +276,9 @@ static void GigaDisplay_UpdateHitachiSliderLabelsFromWidgets();
 static void GigaDisplay_UpdateHitachiRelayMinScreen();
 static void GigaDisplay_UpdateAutoScreen();
 static void GigaDisplay_UpdateAutoSettingsScreen();
+static void GigaDisplay_UpdateAutoSettingsSliderLabelsFromWidgets();
+static void GigaDisplay_UpdateAutoOutputModeLabel(int outputIndex, byte mode);
+static void GigaDisplay_UpdateAutoOutputInputLabel(int outputIndex, int inputIndex);
 
 static void ManualButton_Event(lv_event_t * e);
 static void AutoButton_Event(lv_event_t * e);
@@ -1199,9 +1205,11 @@ static void GigaDisplay_CreateAutoSettingsScreen()
 
     lv_obj_t * modeBtn = CreateButton(g_autoSettingsScreen, "Off", 250, y, 260, 44, AutoOutputModeButton_Event, (void *)(uintptr_t)outputIndex);
     g_autoOutputModeLabels[outputIndex] = GetButtonLabel(modeBtn);
+    g_autoOutputModeUiValue[outputIndex] = 0;
 
     lv_obj_t * inputBtn = CreateButton(g_autoSettingsScreen, "Input 1", 530, y, 140, 44, AutoOutputInputButton_Event, (void *)(uintptr_t)outputIndex);
     g_autoOutputInputLabels[outputIndex] = GetButtonLabel(inputBtn);
+    g_autoOutputInputUiIndex[outputIndex] = 0;
 
     y += 58;
 
@@ -1230,6 +1238,8 @@ static void GigaDisplay_UpdateAutoSettingsScreen()
   if (!g_autoSettingsScreenBuilt) {
     return;
   }
+
+  g_autoSettingsUiRefreshing = true;
 
   char buffer[40];
 
@@ -1269,17 +1279,67 @@ static void GigaDisplay_UpdateAutoSettingsScreen()
 
     byte mode = State_GetAutoOutputMode(outputIndex);
     mode = constrain(mode, 0, AUTO_OUT_MODE_COUNT - 1);
-
-    if (g_autoOutputModeLabels[outputIndex] != NULL) {
-      lv_label_set_text(g_autoOutputModeLabels[outputIndex], AUTO_OUT_MODE_NAMES[mode]);
-    }
+    GigaDisplay_UpdateAutoOutputModeLabel(outputIndex, mode);
 
     int inputIndex = State_GetAutoOutputInputIndex(outputIndex);
     inputIndex = constrain(inputIndex, 0, AssignableInSize - 1);
+    GigaDisplay_UpdateAutoOutputInputLabel(outputIndex, inputIndex);
+  }
 
-    if (g_autoOutputInputLabels[outputIndex] != NULL) {
-      lv_label_set_text(g_autoOutputInputLabels[outputIndex], AssignableInputLabels[inputIndex]);
-    }
+  g_autoSettingsUiRefreshing = false;
+}
+
+static void GigaDisplay_UpdateAutoSettingsSliderLabelsFromWidgets()
+{
+  char buffer[40];
+
+  int runMinutes = lv_slider_get_value(g_autoRunDurationSlider);
+  int pauseSeconds = lv_slider_get_value(g_autoPauseDurationSlider);
+  int penaltySeconds = lv_slider_get_value(g_autoPenaltyDurationSlider);
+  int onMs = AutoSettings_MsSliderToValue(lv_slider_get_value(g_autoOnTimeSlider));
+  int offMs = AutoSettings_MsSliderToValue(lv_slider_get_value(g_autoOffTimeSlider));
+
+  snprintf(buffer, sizeof(buffer), "%d min", runMinutes);
+  lv_label_set_text(g_autoRunDurationValueLabel, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%d s", pauseSeconds);
+  lv_label_set_text(g_autoPauseDurationValueLabel, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%d s", penaltySeconds);
+  lv_label_set_text(g_autoPenaltyDurationValueLabel, buffer);
+
+  AutoSettings_FormatMs(buffer, sizeof(buffer), onMs);
+  lv_label_set_text(g_autoOnTimeValueLabel, buffer);
+
+  AutoSettings_FormatMs(buffer, sizeof(buffer), offMs);
+  lv_label_set_text(g_autoOffTimeValueLabel, buffer);
+}
+
+static void GigaDisplay_UpdateAutoOutputModeLabel(int outputIndex, byte mode)
+{
+  if (outputIndex < 0 || outputIndex >= OutSize) {
+    return;
+  }
+
+  mode = constrain(mode, 0, AUTO_OUT_MODE_COUNT - 1);
+  g_autoOutputModeUiValue[outputIndex] = mode;
+
+  if (g_autoOutputModeLabels[outputIndex] != NULL) {
+    lv_label_set_text(g_autoOutputModeLabels[outputIndex], AUTO_OUT_MODE_NAMES[mode]);
+  }
+}
+
+static void GigaDisplay_UpdateAutoOutputInputLabel(int outputIndex, int inputIndex)
+{
+  if (outputIndex < 0 || outputIndex >= OutSize) {
+    return;
+  }
+
+  inputIndex = constrain(inputIndex, 0, AssignableInSize - 1);
+  g_autoOutputInputUiIndex[outputIndex] = inputIndex;
+
+  if (g_autoOutputInputLabels[outputIndex] != NULL) {
+    lv_label_set_text(g_autoOutputInputLabels[outputIndex], AssignableInputLabels[inputIndex]);
   }
 }
 
@@ -1657,25 +1717,34 @@ static void AutoSettingsBackButton_Event(lv_event_t * e)
 
 static void AutoSettingsSlider_Event(lv_event_t * e)
 {
+  if (g_autoSettingsUiRefreshing) {
+    return;
+  }
+
   lv_obj_t * slider = (lv_obj_t *)lv_event_get_target(e);
+  int sliderValue = lv_slider_get_value(slider);
 
   if (slider == g_autoRunDurationSlider) {
-    Command_SetAutoRunDurationMinutes(lv_slider_get_value(slider));
+    Command_SetAutoRunDurationMinutes(sliderValue);
   }
   else if (slider == g_autoPauseDurationSlider) {
-    Command_SetAutoPauseDurationSeconds(lv_slider_get_value(slider));
+    Command_SetAutoPauseDurationSeconds(sliderValue);
   }
   else if (slider == g_autoPenaltyDurationSlider) {
-    Command_SetAutoPenaltyDurationSeconds(lv_slider_get_value(slider));
+    Command_SetAutoPenaltyDurationSeconds(sliderValue);
   }
   else if (slider == g_autoOnTimeSlider) {
-    Command_SetAutoIoOnTimeMs(AutoSettings_MsSliderToValue(lv_slider_get_value(slider)));
+    Command_SetAutoIoOnTimeMs(AutoSettings_MsSliderToValue(sliderValue));
   }
   else if (slider == g_autoOffTimeSlider) {
-    Command_SetAutoIoOffTimeMs(AutoSettings_MsSliderToValue(lv_slider_get_value(slider)));
+    Command_SetAutoIoOffTimeMs(AutoSettings_MsSliderToValue(sliderValue));
   }
 
-  GigaDisplay_UpdateAutoSettingsScreen();
+  // Update visible text from the widget value immediately.
+  // Do not refresh the full screen here, because commands are deferred and
+  // the status snapshot still contains the previous setting until loop()
+  // drains the command queue.
+  GigaDisplay_UpdateAutoSettingsSliderLabelsFromWidgets();
 }
 
 static void AutoOutputModeButton_Event(lv_event_t * e)
@@ -1686,7 +1755,7 @@ static void AutoOutputModeButton_Event(lv_event_t * e)
     return;
   }
 
-  byte mode = State_GetAutoOutputMode(outputIndex);
+  byte mode = g_autoOutputModeUiValue[outputIndex];
   mode++;
 
   if (mode >= AUTO_OUT_MODE_COUNT) {
@@ -1694,8 +1763,7 @@ static void AutoOutputModeButton_Event(lv_event_t * e)
   }
 
   Command_SetAutoOutputMode(outputIndex, mode);
-
-  GigaDisplay_UpdateAutoSettingsScreen();
+  GigaDisplay_UpdateAutoOutputModeLabel(outputIndex, mode);
 }
 
 static void AutoOutputInputButton_Event(lv_event_t * e)
@@ -1706,9 +1774,14 @@ static void AutoOutputInputButton_Event(lv_event_t * e)
     return;
   }
 
-  Command_CycleAutoOutputInputIndex(outputIndex);
+  int inputIndex = g_autoOutputInputUiIndex[outputIndex] + 1;
 
-  GigaDisplay_UpdateAutoSettingsScreen();
+  if (inputIndex >= AssignableInSize) {
+    inputIndex = 0;
+  }
+
+  Command_SetAutoOutputInputIndex(outputIndex, inputIndex);
+  GigaDisplay_UpdateAutoOutputInputLabel(outputIndex, inputIndex);
 }
 
 static void HitachiButton_Event(lv_event_t * e)
