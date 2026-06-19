@@ -712,7 +712,7 @@ static void SetIdleStatusError(const char * prefix)
   }
 
   static char buffer[48];
-  snprintf(buffer, sizeof(buffer), "%s: %d", prefix, Settings_GetLastError());
+  snprintf(buffer, sizeof(buffer), "%s: %d", prefix, State_GetSettingsLastError());
   lv_label_set_text(g_idleStatusLabel, buffer);
 }
 
@@ -1873,7 +1873,7 @@ static void HitachiRelayMinBackButton_Event(lv_event_t * e)
 
 static void SaveSettingsButton_Event(lv_event_t * e)
 {
-  bool ok = Settings_SaveAll();
+  bool ok = Command_RequestSettingsSave();
 
   if (ok) {
     SetIdleStatusText("Settings saved");
@@ -1885,21 +1885,13 @@ static void SaveSettingsButton_Event(lv_event_t * e)
 
 static void LoadSettingsButton_Event(lv_event_t * e)
 {
-  bool ok = Settings_LoadAll();
+  bool ok = Command_RequestSettingsLoad();
 
   if (ok) {
-    Command_NormalizeHitachiSettings();
-    State_RefreshControlStatus();
     SetIdleStatusText("Settings loaded");
   }
   else {
     SetIdleStatusError("Load failed");
-  }
-
-  GigaDisplay_UpdateManualIndicators();
-
-  if (lv_scr_act() == g_hitachiScreen) {
-    GigaDisplay_UpdateHitachiScreen();
   }
 }
 

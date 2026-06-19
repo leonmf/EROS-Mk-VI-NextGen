@@ -104,9 +104,7 @@
 #include <string.h>
 
 // ------------------------------------------------------------
-
 // Giga Display function prototypes - Pre-defined to fix compile issues.
-
 // ------------------------------------------------------------
 void GigaDisplay_Setup();
 void GigaDisplay_Task();
@@ -133,6 +131,7 @@ void Command_SetDimmerEnabledRequest(bool enabled);
 void Command_ToggleDimmerEnabledRequest();
 void Command_SetMode(byte mode);
 byte State_GetMode();
+int State_GetSettingsLastError();
 int State_GetHitachiMode(bool onSettings);
 void Command_SetHitachiMode(bool onSettings, int mode);
 int State_GetHitachiSetPoint(bool onSettings);
@@ -154,12 +153,15 @@ void Command_SetHitachiPeriodPrecise(bool onSettings, bool precise);
 void Command_ToggleHitachiPeriodPrecise(bool onSettings);
 
 void State_RefreshControlStatus();
+void State_ProcessPendingCommands();
 
 //Settings save load prototypes
 bool Settings_SaveAll();
 bool Settings_LoadAll();
 bool Settings_LoadAllOrDefaults();
 void Settings_LoadDefaults();
+bool Command_RequestSettingsSave();
+bool Command_RequestSettingsLoad();
 
 bool Settings_Begin();
 int Settings_GetLastError();
@@ -413,9 +415,16 @@ void setup() {
 
 
 void loop() {
-  //Update the LCD Display
+  // Update the Giga Display UI.
+  // UI actions enqueue commands through Command_Send().
   GigaDisplay_Task();
-  //Handle embedded functons
+
+  // Process any pending UI/control commands.
+  // For now this still runs on the same core, but this simulates the future
+  // M4-side command drain point.
+  State_ProcessPendingCommands();
+
+  // Handle embedded control functions.
   Control_Task();
 }
 

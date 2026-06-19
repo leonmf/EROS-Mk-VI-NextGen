@@ -215,9 +215,13 @@ static void Command_Send(
     return;
   }
 
-  // For now, preserve the existing immediate behavior.
-  // Later, this call can be removed and the control core can call
-  // State_ProcessPendingCommands() from its own task loop.
+  // Single-core compatibility:
+  // LVGL slider callbacks expect the state snapshot to be current before the
+  // callback finishes. Drain immediately for now.
+  //
+  // The queue still exists, and loop() can still call State_ProcessPendingCommands().
+  // Later, when the display callbacks are made asynchronous-safe, this immediate
+  // drain can be removed.
   State_ProcessPendingCommands();
 }
 
@@ -471,6 +475,11 @@ void Command_SetMode(byte mode)
 byte State_GetMode()
 {
   return g_controlStatus.mode;
+}
+
+int State_GetSettingsLastError()
+{
+  return Settings_GetLastError();
 }
 
 // ------------------------------------------------------------
@@ -934,6 +943,43 @@ void Command_ForceFixedAutoOutputModes()
 }
 
 // ------------------------------------------------------------
+// Settings command helpers
+// ------------------------------------------------------------
+
+static bool Command_ApplySettingsSave()
+{
+  return Settings_SaveAll();
+}
+
+static bool Command_ApplySettingsLoad()
+{
+  bool ok = Settings_LoadAll();
+
+  if (ok)
+  {
+    Command_NormalizeHitachiSettings();
+    Command_ForceFixedAutoOutputModes();
+    State_RefreshControlStatus();
+  }
+
+  return ok;
+}
+
+bool Command_RequestSettingsSave()
+{
+  bool ok = Command_ApplySettingsSave();
+  State_RefreshControlStatus();
+  return ok;
+}
+
+bool Command_RequestSettingsLoad()
+{
+  bool ok = Command_ApplySettingsLoad();
+  State_RefreshControlStatus();
+  return ok;
+}
+
+// ------------------------------------------------------------
 // Command execution
 //
 // For now this runs immediately on the same core.
@@ -1034,6 +1080,14 @@ void Command_Execute(const EROS_Command & command)
 
     case EROS_CMD_SET_HITACHI_MIN_RELAY_VALUE:
       Command_ApplySetHitachiMinRelayValue((int)command.value);
+      break;
+
+    case EROS_CMD_REQUEST_SETTINGS_SAVE:
+      Command_ApplySettingsSave();
+      break;
+
+    case EROS_CMD_REQUEST_SETTINGS_LOAD:
+      Command_ApplySettingsLoad();
       break;
 
     default:
