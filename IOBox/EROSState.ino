@@ -1,9 +1,9 @@
 /*
   EROSState.ino
 
-  Thin command/state interface between UI code and IO/control globals.
+  Command/state bridge between UI code and IO/control globals.
 
-  For now, these functions still read/write the existing global variables:
+  For now, the control-side functions still read/write the existing global variables:
     InValues[]
     OutValues[]
     Manual.out[]
@@ -34,11 +34,29 @@ static int g_commandQueueTail = 0;
 static int g_commandQueueCount = 0;
 static bool g_processingCommands = false;
 
+// Single-core compatibility flag.
+//
+// true:
+//   Command_Send() submits a command packet and immediately drains the queue.
+//   This keeps LVGL slider callbacks synchronous.
+//
+// false:
+//   Command_Send() only submits the command packet. The control side must call
+//   State_ProcessPendingCommands() from its task loop.
+//
+// Later, the M7 build should behave like false, and the M4 build should own
+// State_ProcessPendingCommands().
+static const bool EROS_SINGLE_CORE_IMMEDIATE_COMMAND_PROCESSING = true;
+
 static EROS_ControlStatus g_controlStatus;
 
+bool Command_SubmitToControl(const EROS_Command & command);
 void Command_Execute(const EROS_Command & command);
+
 void State_RefreshControlStatus();
 void State_ProcessPendingCommands();
+void State_CopyControlStatus(EROS_ControlStatus & status);
+void State_ApplyControlStatus(const EROS_ControlStatus & status);
 
 static bool Command_QueuePush(const EROS_Command & command);
 static bool Command_QueuePop(EROS_Command & command);
@@ -83,6 +101,11 @@ static bool Command_QueuePop(EROS_Command & command)
   return true;
 }
 
+bool Command_SubmitToControl(const EROS_Command & command)
+{
+  return Command_QueuePush(command);
+}
+
 static void Command_Send(
   EROS_CommandType type,
   int index = 0,
@@ -99,7 +122,7 @@ static void Command_Send(
   command.boolValue = boolValue;
   command.onSettings = onSettings;
 
-  if (!Command_QueuePush(command))
+  if (!Command_SubmitToControl(command))
   {
     // Queue overflow should not silently drop operator commands.
     // For this single-core transition phase, execute immediately as a fallback.
@@ -108,14 +131,13 @@ static void Command_Send(
     return;
   }
 
-  // Single-core compatibility:
-  // LVGL slider callbacks expect the state snapshot to be current before the
-  // callback finishes. Drain immediately for now.
-  //
-  // The queue still exists, and loop() can still call State_ProcessPendingCommands().
-  // Later, when the display callbacks are made asynchronous-safe, this immediate
-  // drain can be removed.
-  State_ProcessPendingCommands();
+  if (EROS_SINGLE_CORE_IMMEDIATE_COMMAND_PROCESSING)
+  {
+    // Single-core compatibility:
+    // LVGL slider callbacks expect the state snapshot to be current before the
+    // callback finishes. Drain immediately for now.
+    State_ProcessPendingCommands();
+  }
 }
 
 void State_ProcessPendingCommands()
@@ -205,6 +227,16 @@ void State_RefreshControlStatus()
   g_controlStatus.hitachiPeriodPreciseOff = hS.periodPreciseOff;
 
   g_controlStatus.hitachiMinRelayValue = hS.minRelayValue;
+}
+
+void State_CopyControlStatus(EROS_ControlStatus & status)
+{
+  status = g_controlStatus;
+}
+
+void State_ApplyControlStatus(const EROS_ControlStatus & status)
+{
+  g_controlStatus = status;
 }
 
 // ------------------------------------------------------------
