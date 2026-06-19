@@ -52,6 +52,7 @@ static lv_obj_t * g_autoScreen = NULL;
 static lv_obj_t * g_autoSettingsScreen = NULL;
 static lv_obj_t * g_hitachiScreen = NULL;
 static lv_obj_t * g_hitachiRelayMinScreen = NULL;
+static lv_obj_t * g_statusScreen = NULL;
 
 static lv_obj_t * g_previousScreenBeforeHitachi = NULL;
 static lv_obj_t * g_previousScreenBeforeRelayMin = NULL;
@@ -61,6 +62,13 @@ static lv_obj_t * g_previousScreenBeforeRelayMin = NULL;
 // ------------------------------------------------------------
 
 static lv_obj_t * g_idleStatusLabel = NULL;
+
+// ------------------------------------------------------------
+// Status / debug screen widgets
+// ------------------------------------------------------------
+#define STATUS_DEBUG_ROW_COUNT 12
+
+static lv_obj_t * g_statusDebugValueLabels[STATUS_DEBUG_ROW_COUNT];
 
 // ------------------------------------------------------------
 // Manual screen widgets
@@ -146,6 +154,7 @@ static bool g_autoScreenBuilt = false;
 static bool g_autoSettingsScreenBuilt = false;
 static bool g_hitachiScreenBuilt = false;
 static bool g_hitachiRelayMinScreenBuilt = false;
+static bool g_statusScreenBuilt = false;
 
 static bool g_hitachiEditingOnSettings = true;
 static bool g_manualSkipNextAutoRefresh = false;
@@ -264,6 +273,7 @@ void GigaDisplay_ShowHitachiScreen();
 void GigaDisplay_ShowHitachiRelayMinScreen();
 void GigaDisplay_ShowAutoScreen();
 void GigaDisplay_ShowAutoSettingsScreen();
+void GigaDisplay_ShowStatusScreen();
 
 void GigaDisplay_UpdateManualIndicators();
 
@@ -273,6 +283,7 @@ static void GigaDisplay_CreateHitachiScreen();
 static void GigaDisplay_CreateHitachiRelayMinScreen();
 static void GigaDisplay_CreateAutoScreen();
 static void GigaDisplay_CreateAutoSettingsScreen();
+static void GigaDisplay_CreateStatusScreen();
 static void GigaDisplay_DestroyAutoSettingsScreen();
 static void GigaDisplay_DestroyHitachiScreen();
 
@@ -287,6 +298,8 @@ static void GigaDisplay_UpdateAutoOutputModeLabel(int outputIndex, byte mode);
 static void GigaDisplay_UpdateAutoOutputInputLabel(int outputIndex, int inputIndex);
 static void GigaDisplay_UpdateIdleSettingsResult();
 static void GigaDisplay_UpdateIdleTransportHealth();
+static void GigaDisplay_UpdateStatusScreen();
+static lv_obj_t * GigaDisplay_CreateStatusDebugRow(int row, const char * labelText);
 
 static void ManualButton_Event(lv_event_t * e);
 static void AutoButton_Event(lv_event_t * e);
@@ -309,6 +322,8 @@ static void HitachiRelayMinBackButton_Event(lv_event_t * e);
 
 static void SaveSettingsButton_Event(lv_event_t * e);
 static void LoadSettingsButton_Event(lv_event_t * e);
+static void StatusButton_Event(lv_event_t * e);
+static void StatusBackButton_Event(lv_event_t * e);
 
 static void AutoStartButton_Event(lv_event_t * e);
 static void AutoStopButton_Event(lv_event_t * e);
@@ -777,6 +792,9 @@ void GigaDisplay_Task()
     }
     //Serial.println("Auto Screen");
   }
+  else if (lv_scr_act() == g_statusScreen) {
+    GigaDisplay_UpdateStatusScreen();
+  }
   else if (lv_scr_act() == g_hitachiScreen) {
     if (g_hitachiSkipNextAutoRefresh) {
       // A Hitachi slider callback just queued a command.
@@ -872,6 +890,8 @@ static void GigaDisplay_CreateIdleScreen()
   CreateButton(g_idleScreen, "Auto", autoX, mainY, mainButtonW, mainButtonH, AutoButton_Event, NULL);
   CreateButton(g_idleScreen, "Hitachi", hitachiX, mainY, mainButtonW, mainButtonH, HitachiButton_Event, NULL);
 
+  CreateButton(g_idleScreen, "Status", 310, 260, 180, 55, StatusButton_Event, NULL);
+
   const int settingsButtonW = 220;
   const int settingsButtonH = 65;
   const int settingsY = 335;
@@ -893,6 +913,115 @@ void GigaDisplay_ShowIdleScreen()
     GigaDisplay_CreateIdleScreen();
   }
   lv_scr_load(g_idleScreen);
+}
+
+// ------------------------------------------------------------
+// Status / debug screen
+// ------------------------------------------------------------
+
+static lv_obj_t * GigaDisplay_CreateStatusDebugRow(int row, const char * labelText)
+{
+  const int leftX = 55;
+  const int valueX = 430;
+  const int startY = 72;
+  const int rowH = 27;
+  int y = startY + (row * rowH);
+
+  CreateWhiteLabel(g_statusScreen, labelText, leftX, y);
+  return CreateWhiteLabel(g_statusScreen, "-", valueX, y);
+}
+
+static void GigaDisplay_CreateStatusScreen()
+{
+  g_statusScreen = CreateScreen(false);
+
+  CreateScreenTitle(g_statusScreen, "Status / Transport Debug");
+  CreateAlignedButton(g_statusScreen, "Back", LV_ALIGN_BOTTOM_RIGHT, -30, -25, 130, 50, StatusBackButton_Event, NULL);
+
+  g_statusDebugValueLabels[0] = GigaDisplay_CreateStatusDebugRow(0, "Status packets");
+  g_statusDebugValueLabels[1] = GigaDisplay_CreateStatusDebugRow(1, "Status age ms");
+  g_statusDebugValueLabels[2] = GigaDisplay_CreateStatusDebugRow(2, "Status fresh < 1000 ms");
+  g_statusDebugValueLabels[3] = GigaDisplay_CreateStatusDebugRow(3, "M4 publish millis");
+  g_statusDebugValueLabels[4] = GigaDisplay_CreateStatusDebugRow(4, "M7 command attempts");
+  g_statusDebugValueLabels[5] = GigaDisplay_CreateStatusDebugRow(5, "M7 command accepted");
+  g_statusDebugValueLabels[6] = GigaDisplay_CreateStatusDebugRow(6, "M7 command failed");
+  g_statusDebugValueLabels[7] = GigaDisplay_CreateStatusDebugRow(7, "M4 queue accepted");
+  g_statusDebugValueLabels[8] = GigaDisplay_CreateStatusDebugRow(8, "M4 queue rejected");
+  g_statusDebugValueLabels[9] = GigaDisplay_CreateStatusDebugRow(9, "M4 queue depth");
+  g_statusDebugValueLabels[10] = GigaDisplay_CreateStatusDebugRow(10, "M4 queue capacity");
+  g_statusDebugValueLabels[11] = GigaDisplay_CreateStatusDebugRow(11, "Settings result count");
+
+  g_statusScreenBuilt = true;
+}
+
+void GigaDisplay_ShowStatusScreen()
+{
+  if (!g_displayInitialized) {
+    GigaDisplay_Setup();
+    return;
+  }
+
+  if (!g_statusScreenBuilt) {
+    GigaDisplay_CreateStatusScreen();
+  }
+
+  GigaDisplay_UpdateStatusScreen();
+  lv_scr_load(g_statusScreen);
+}
+
+static void GigaDisplay_SetStatusDebugValue(int row, const char * valueText)
+{
+  if (row < 0 || row >= STATUS_DEBUG_ROW_COUNT) {
+    return;
+  }
+
+  if (g_statusDebugValueLabels[row] != NULL) {
+    lv_label_set_text(g_statusDebugValueLabels[row], valueText);
+  }
+}
+
+static void GigaDisplay_UpdateStatusScreen()
+{
+  if (!g_statusScreenBuilt) {
+    return;
+  }
+
+  char buffer[40];
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportStatusCounter());
+  GigaDisplay_SetStatusDebugValue(0, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportStatusAgeMs());
+  GigaDisplay_SetStatusDebugValue(1, buffer);
+
+  GigaDisplay_SetStatusDebugValue(2, State_IsTransportStatusFresh(1000) ? "YES" : "NO");
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportStatusPublishMillis());
+  GigaDisplay_SetStatusDebugValue(3, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandSendAttemptCounter());
+  GigaDisplay_SetStatusDebugValue(4, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandSendAcceptedCounter());
+  GigaDisplay_SetStatusDebugValue(5, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandSendFailedCounter());
+  GigaDisplay_SetStatusDebugValue(6, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandAcceptedCounter());
+  GigaDisplay_SetStatusDebugValue(7, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandRejectedCounter());
+  GigaDisplay_SetStatusDebugValue(8, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%u", State_GetTransportCommandQueueDepth());
+  GigaDisplay_SetStatusDebugValue(9, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%u", State_GetTransportCommandQueueCapacity());
+  GigaDisplay_SetStatusDebugValue(10, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetSettingsResultCounter());
+  GigaDisplay_SetStatusDebugValue(11, buffer);
 }
 
 // ------------------------------------------------------------
@@ -1725,6 +1854,16 @@ static void GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue()
 // ------------------------------------------------------------
 // Button event handlers
 // ------------------------------------------------------------
+
+static void StatusButton_Event(lv_event_t * e)
+{
+  GigaDisplay_ShowStatusScreen();
+}
+
+static void StatusBackButton_Event(lv_event_t * e)
+{
+  GigaDisplay_ShowIdleScreen();
+}
 
 static void ManualButton_Event(lv_event_t * e)
 {
