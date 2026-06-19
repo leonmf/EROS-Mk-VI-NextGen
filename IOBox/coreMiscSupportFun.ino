@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M4_SIDE
+
 // ------------------------------------------------------------
 // coreMiscSupportFun.ino
 //
@@ -77,3 +81,5 @@ boolean CheckButtonNoWait(int buttonidx)
 
   return IsInputPressed(buttonidx);
 }
+
+#endif  // EROS_BUILD_HAS_M4_SIDE

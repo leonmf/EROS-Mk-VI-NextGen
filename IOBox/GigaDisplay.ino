@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M7_SIDE
+
 /*
   GigaDisplay.ino
 
@@ -66,7 +70,7 @@ static lv_obj_t * g_idleStatusLabel = NULL;
 // ------------------------------------------------------------
 // Status / debug screen widgets
 // ------------------------------------------------------------
-#define STATUS_DEBUG_ROW_COUNT 16
+#define STATUS_DEBUG_ROW_COUNT 17
 
 static lv_obj_t * g_statusDebugValueLabels[STATUS_DEBUG_ROW_COUNT];
 
@@ -924,8 +928,8 @@ static lv_obj_t * GigaDisplay_CreateStatusDebugRow(int row, const char * labelTe
 {
   const int leftX = 55;
   const int valueX = 430;
-  const int startY = 58;
-  const int rowH = 22;
+  const int startY = 50;
+  const int rowH = 20;
   int y = startY + (row * rowH);
 
   CreateWhiteLabel(g_statusScreen, labelText, leftX, y);
@@ -940,22 +944,23 @@ static void GigaDisplay_CreateStatusScreen()
   CreateAlignedButton(g_statusScreen, "Ping", LV_ALIGN_BOTTOM_LEFT, 30, -25, 130, 50, StatusPingButton_Event, NULL);
   CreateAlignedButton(g_statusScreen, "Back", LV_ALIGN_BOTTOM_RIGHT, -30, -25, 130, 50, StatusBackButton_Event, NULL);
 
-  g_statusDebugValueLabels[0] = GigaDisplay_CreateStatusDebugRow(0, "Status packets");
-  g_statusDebugValueLabels[1] = GigaDisplay_CreateStatusDebugRow(1, "Status age ms");
-  g_statusDebugValueLabels[2] = GigaDisplay_CreateStatusDebugRow(2, "Status fresh < 1000 ms");
-  g_statusDebugValueLabels[3] = GigaDisplay_CreateStatusDebugRow(3, "M4 publish millis");
-  g_statusDebugValueLabels[4] = GigaDisplay_CreateStatusDebugRow(4, "M7 command attempts");
-  g_statusDebugValueLabels[5] = GigaDisplay_CreateStatusDebugRow(5, "M7 command accepted");
-  g_statusDebugValueLabels[6] = GigaDisplay_CreateStatusDebugRow(6, "M7 command failed");
-  g_statusDebugValueLabels[7] = GigaDisplay_CreateStatusDebugRow(7, "M4 queue accepted");
-  g_statusDebugValueLabels[8] = GigaDisplay_CreateStatusDebugRow(8, "M4 queue rejected");
-  g_statusDebugValueLabels[9] = GigaDisplay_CreateStatusDebugRow(9, "M4 queue depth");
-  g_statusDebugValueLabels[10] = GigaDisplay_CreateStatusDebugRow(10, "M4 queue capacity");
-  g_statusDebugValueLabels[11] = GigaDisplay_CreateStatusDebugRow(11, "Settings result count");
-  g_statusDebugValueLabels[12] = GigaDisplay_CreateStatusDebugRow(12, "Loopback sent count");
-  g_statusDebugValueLabels[13] = GigaDisplay_CreateStatusDebugRow(13, "Loopback M4 request id");
-  g_statusDebugValueLabels[14] = GigaDisplay_CreateStatusDebugRow(14, "Loopback echo id/count");
-  g_statusDebugValueLabels[15] = GigaDisplay_CreateStatusDebugRow(15, "Loopback ok / age ms");
+  g_statusDebugValueLabels[0] = GigaDisplay_CreateStatusDebugRow(0, "Build mode");
+  g_statusDebugValueLabels[1] = GigaDisplay_CreateStatusDebugRow(1, "Status packets");
+  g_statusDebugValueLabels[2] = GigaDisplay_CreateStatusDebugRow(2, "Status age ms");
+  g_statusDebugValueLabels[3] = GigaDisplay_CreateStatusDebugRow(3, "Status fresh < 1000 ms");
+  g_statusDebugValueLabels[4] = GigaDisplay_CreateStatusDebugRow(4, "M4 publish millis");
+  g_statusDebugValueLabels[5] = GigaDisplay_CreateStatusDebugRow(5, "M7 command attempts");
+  g_statusDebugValueLabels[6] = GigaDisplay_CreateStatusDebugRow(6, "M7 command accepted");
+  g_statusDebugValueLabels[7] = GigaDisplay_CreateStatusDebugRow(7, "M7 command failed");
+  g_statusDebugValueLabels[8] = GigaDisplay_CreateStatusDebugRow(8, "M4 queue accepted");
+  g_statusDebugValueLabels[9] = GigaDisplay_CreateStatusDebugRow(9, "M4 queue rejected");
+  g_statusDebugValueLabels[10] = GigaDisplay_CreateStatusDebugRow(10, "M4 queue depth");
+  g_statusDebugValueLabels[11] = GigaDisplay_CreateStatusDebugRow(11, "M4 queue capacity");
+  g_statusDebugValueLabels[12] = GigaDisplay_CreateStatusDebugRow(12, "Settings result count");
+  g_statusDebugValueLabels[13] = GigaDisplay_CreateStatusDebugRow(13, "Loopback sent count");
+  g_statusDebugValueLabels[14] = GigaDisplay_CreateStatusDebugRow(14, "Loopback M4 request id");
+  g_statusDebugValueLabels[15] = GigaDisplay_CreateStatusDebugRow(15, "Loopback echo id/count");
+  g_statusDebugValueLabels[16] = GigaDisplay_CreateStatusDebugRow(16, "Loopback ok / age ms");
 
   g_statusScreenBuilt = true;
 }
@@ -994,56 +999,58 @@ static void GigaDisplay_UpdateStatusScreen()
 
   char buffer[40];
 
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportStatusCounter());
-  GigaDisplay_SetStatusDebugValue(0, buffer);
+  GigaDisplay_SetStatusDebugValue(0, EROS_BUILD_MODE_NAME);
 
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportStatusAgeMs());
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportStatusCounter());
   GigaDisplay_SetStatusDebugValue(1, buffer);
 
-  GigaDisplay_SetStatusDebugValue(2, State_IsTransportStatusFresh(1000) ? "YES" : "NO");
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportStatusAgeMs());
+  GigaDisplay_SetStatusDebugValue(2, buffer);
+
+  GigaDisplay_SetStatusDebugValue(3, State_IsTransportStatusFresh(1000) ? "YES" : "NO");
 
   snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportStatusPublishMillis());
-  GigaDisplay_SetStatusDebugValue(3, buffer);
-
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandSendAttemptCounter());
   GigaDisplay_SetStatusDebugValue(4, buffer);
 
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandSendAcceptedCounter());
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandSendAttemptCounter());
   GigaDisplay_SetStatusDebugValue(5, buffer);
 
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandSendFailedCounter());
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandSendAcceptedCounter());
   GigaDisplay_SetStatusDebugValue(6, buffer);
 
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandAcceptedCounter());
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandSendFailedCounter());
   GigaDisplay_SetStatusDebugValue(7, buffer);
 
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandRejectedCounter());
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandAcceptedCounter());
   GigaDisplay_SetStatusDebugValue(8, buffer);
 
-  snprintf(buffer, sizeof(buffer), "%u", State_GetTransportCommandQueueDepth());
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportCommandRejectedCounter());
   GigaDisplay_SetStatusDebugValue(9, buffer);
 
-  snprintf(buffer, sizeof(buffer), "%u", State_GetTransportCommandQueueCapacity());
+  snprintf(buffer, sizeof(buffer), "%u", State_GetTransportCommandQueueDepth());
   GigaDisplay_SetStatusDebugValue(10, buffer);
 
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetSettingsResultCounter());
+  snprintf(buffer, sizeof(buffer), "%u", State_GetTransportCommandQueueCapacity());
   GigaDisplay_SetStatusDebugValue(11, buffer);
 
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportLoopbackRequestCounter());
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetSettingsResultCounter());
   GigaDisplay_SetStatusDebugValue(12, buffer);
 
-  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportLoopbackRequestId());
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportLoopbackRequestCounter());
   GigaDisplay_SetStatusDebugValue(13, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetTransportLoopbackRequestId());
+  GigaDisplay_SetStatusDebugValue(14, buffer);
 
   snprintf(buffer, sizeof(buffer), "%lu / %lu",
            State_GetTransportLoopbackEchoId(),
            State_GetTransportLoopbackEchoCounter());
-  GigaDisplay_SetStatusDebugValue(14, buffer);
+  GigaDisplay_SetStatusDebugValue(15, buffer);
 
   snprintf(buffer, sizeof(buffer), "%s / %lu",
            State_GetTransportLoopbackOk() ? "OK" : "WAIT",
            State_GetTransportLoopbackEchoAgeMs());
-  GigaDisplay_SetStatusDebugValue(15, buffer);
+  GigaDisplay_SetStatusDebugValue(16, buffer);
 }
 
 // ------------------------------------------------------------
@@ -2226,6 +2233,4 @@ static void LoadSettingsButton_Event(lv_event_t * e)
 //Misc Helper Functions
 // ------------------------------------------------------------
 
-
-
-
+#endif  // EROS_BUILD_HAS_M7_SIDE

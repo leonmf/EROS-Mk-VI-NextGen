@@ -4,6 +4,52 @@
 #include <Arduino.h>
 
 // ------------------------------------------------------------
+// Build mode selection
+//
+// Default mode is the current single-core simulation. Future M7-only and
+// M4-only builds should set exactly one of these flags to 1.
+// ------------------------------------------------------------
+
+#if !defined(EROS_BUILD_SINGLE_CORE_SIM) && !defined(EROS_BUILD_M7_CORE) && !defined(EROS_BUILD_M4_CORE)
+#define EROS_BUILD_SINGLE_CORE_SIM 1
+#endif
+
+#ifndef EROS_BUILD_SINGLE_CORE_SIM
+#define EROS_BUILD_SINGLE_CORE_SIM 0
+#endif
+
+#ifndef EROS_BUILD_M7_CORE
+#define EROS_BUILD_M7_CORE 0
+#endif
+
+#ifndef EROS_BUILD_M4_CORE
+#define EROS_BUILD_M4_CORE 0
+#endif
+
+#define EROS_BUILD_MODE_COUNT (EROS_BUILD_SINGLE_CORE_SIM + EROS_BUILD_M7_CORE + EROS_BUILD_M4_CORE)
+
+#if EROS_BUILD_MODE_COUNT != 1
+#error "Select exactly one EROS build mode: EROS_BUILD_SINGLE_CORE_SIM, EROS_BUILD_M7_CORE, or EROS_BUILD_M4_CORE."
+#endif
+
+#if EROS_BUILD_SINGLE_CORE_SIM
+#define EROS_BUILD_MODE_NAME "Single Core Sim"
+#define EROS_BUILD_HAS_M7_SIDE 1
+#define EROS_BUILD_HAS_M4_SIDE 1
+#define EROS_BUILD_USES_IN_PROCESS_TRANSPORT 1
+#elif EROS_BUILD_M7_CORE
+#define EROS_BUILD_MODE_NAME "M7 UI Core"
+#define EROS_BUILD_HAS_M7_SIDE 1
+#define EROS_BUILD_HAS_M4_SIDE 0
+#define EROS_BUILD_USES_IN_PROCESS_TRANSPORT 0
+#elif EROS_BUILD_M4_CORE
+#define EROS_BUILD_MODE_NAME "M4 Control Core"
+#define EROS_BUILD_HAS_M7_SIDE 0
+#define EROS_BUILD_HAS_M4_SIDE 1
+#define EROS_BUILD_USES_IN_PROCESS_TRANSPORT 0
+#endif
+
+// ------------------------------------------------------------
 // Shared sizing constants
 // ------------------------------------------------------------
 

@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M4_SIDE
+
 /*
   HitachiFunctions.ino
 
@@ -191,3 +195,5 @@ void WriteHitachiOutput(int pwmValue)
   GigaDimmer_setPower((uint8_t)userPercent);
   GigaDimmer_enable(userPercent > 0);
 }
+
+#endif  // EROS_BUILD_HAS_M4_SIDE

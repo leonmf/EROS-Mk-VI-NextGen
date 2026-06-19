@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M4_SIDE
+
 /*
   GigaSettings.ino
 
@@ -404,3 +408,4 @@ bool Settings_LoadAllOrDefaults()
   return false;
 }
 
+#endif  // EROS_BUILD_HAS_M4_SIDE

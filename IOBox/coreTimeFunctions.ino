@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M4_SIDE
+
 /*
   coreTimeFunctions.ino
 
@@ -142,3 +146,5 @@ void CheckStopButton(int StopInput)
     SoftSwitches.Stop = 0;
   }
 }
+
+#endif  // EROS_BUILD_HAS_M4_SIDE

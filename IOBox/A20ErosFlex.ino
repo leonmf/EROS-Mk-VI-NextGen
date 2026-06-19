@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M4_SIDE
+
 
 
 void Init_EROSFlex()
@@ -199,3 +203,4 @@ boolean ToggleFlex(int idx, boolean bValue, boolean bRandom)
   return bReturn;
 }
 
+#endif  // EROS_BUILD_HAS_M4_SIDE

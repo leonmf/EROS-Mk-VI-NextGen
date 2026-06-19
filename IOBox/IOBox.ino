@@ -29,26 +29,36 @@
 // ------------------------------------------------------------
 
 #include "EROSShared.h"
+#include <string.h>
+
+#if EROS_BUILD_HAS_M7_SIDE
 #include "Arduino_H7_Video.h"
 #include "Arduino_GigaDisplayTouch.h"
 #include "lvgl.h"
+#endif
+
+#if EROS_BUILD_HAS_M4_SIDE
 #include <mbed.h>
-#include <string.h>
+#endif
 
 // ------------------------------------------------------------
-// Giga Display public functions
+// Giga Display public functions - M7 side
 // ------------------------------------------------------------
 
+#if EROS_BUILD_HAS_M7_SIDE
 void GigaDisplay_Setup();
 void GigaDisplay_Task();
 void GigaDisplay_ShowIdleScreen();
 void GigaDisplay_ShowManualScreen();
 void GigaDisplay_UpdateManualIndicators();
 void GigaDisplay_ShowHitachiScreen();
+#endif
 
 // ------------------------------------------------------------
-// EROS State / Command interface prototypes
+// M7-facing EROS State / Command interface prototypes
 // ------------------------------------------------------------
+
+#if EROS_BUILD_HAS_M7_SIDE
 
 // Input / output state
 bool State_GetInput(int inputIndex);
@@ -77,6 +87,8 @@ int State_GetSettingsLastError();
 byte State_GetSettingsLastAction();
 bool State_GetSettingsLastOk();
 unsigned long State_GetSettingsResultCounter();
+void Command_RequestSettingsSave();
+void Command_RequestSettingsLoad();
 
 // Transport health
 unsigned long State_GetTransportStatusCounter();
@@ -98,16 +110,8 @@ unsigned long State_GetTransportLoopbackEchoCounter();
 unsigned long State_GetTransportLoopbackEchoAgeMs();
 bool State_GetTransportLoopbackOk();
 
-void Command_RequestSettingsSave();
-void Command_RequestSettingsLoad();
-
-// Status snapshot and command queue processing
-bool Command_SubmitToControl(const EROS_Command & command);
-void State_RefreshControlStatus();
-void State_ProcessPendingCommands();
-void State_CopyControlStatus(EROS_ControlStatus & status);
+// M7 status snapshot receive point
 void State_ApplyControlStatus(const EROS_ControlStatus & status);
-bool Control_GetAssignedInputForOutput(int outputIndex);
 
 // Hitachi state / commands
 int State_GetHitachiMode(bool onSettings);
@@ -128,8 +132,6 @@ void Command_SetHitachiPeriod(bool onSettings, int periodMs);
 bool State_GetHitachiPeriodPrecise(bool onSettings);
 void Command_SetHitachiPeriodPrecise(bool onSettings, bool precise);
 void Command_ToggleHitachiPeriodPrecise(bool onSettings);
-
-void Command_NormalizeHitachiSettings();
 
 int State_GetHitachiCurrentOutput();
 
@@ -177,15 +179,29 @@ int State_GetAutoOutputInputIndex(int outputIndex);
 void Command_SetAutoOutputInputIndex(int outputIndex, int inputIndex);
 void Command_CycleAutoOutputInputIndex(int outputIndex);
 
+#endif  // EROS_BUILD_HAS_M7_SIDE
+
+// ------------------------------------------------------------
+// M4-facing bridge/control prototypes
+// ------------------------------------------------------------
+
+#if EROS_BUILD_HAS_M4_SIDE
+
+// Status snapshot and command queue processing
+bool EROSM4_ReceiveCommandFromTransport(const EROS_Command & command);
+void State_RefreshControlStatus();
+void State_ProcessPendingCommands();
+void State_CopyControlStatus(EROS_ControlStatus & status);
+bool Control_GetAssignedInputForOutput(int outputIndex);
+
+// M4 command normalization helpers
+void Command_NormalizeHitachiSettings();
 void Command_ForceFixedAutoOutputModes();
 
-// ------------------------------------------------------------
 // Settings implementation prototypes
 // These are implementation-level functions. Display/UI code should use
-// Command_RequestSettingsSave(), Command_RequestSettingsLoad(), and
-// State_GetSettingsLastError() instead of calling these directly.
-// ------------------------------------------------------------
-
+// Command_RequestSettingsSave(), Command_RequestSettingsLoad(), and status
+// result fields instead of calling these directly.
 bool Settings_SaveAll();
 bool Settings_LoadAll();
 bool Settings_LoadAllOrDefaults();
@@ -194,11 +210,31 @@ void Settings_LoadDefaults();
 bool Settings_Begin();
 int Settings_GetLastError();
 
+// Control mode function prototypes
+void Init_Idle(void);
+void Init_EROSFlex(void);
+
+void Execute_Idle(void);
+void Execute_EROSFlex(void);
+
+void ID_Idle(void);
+void ID_EROSFlex(void);
+
+void Control_Setup(void);
+void Control_Task(void);
+void CheckMode(void);
+void RunMode(void);
+
+#endif  // EROS_BUILD_HAS_M4_SIDE
+
 // ------------------------------------------------------------
-// Dedicated system input pins
-// These are used for Start / Stop / Pause only.
+// M4-side IO pins, state, and control tables
 // ------------------------------------------------------------
 
+#if EROS_BUILD_HAS_M4_SIDE
+
+// Dedicated system input pins
+// These are used for Start / Stop / Pause only.
 #define PIN_IN_START  5
 #define PIN_IN_STOP   6
 #define PIN_IN_PAUSE  7
@@ -209,11 +245,8 @@ const int DigitalInputs[InSize] = {
   PIN_IN_PAUSE   // IN_PAUSE
 };
 
-// ------------------------------------------------------------
 // Assignable input pins
 // These are selectable per output.
-// ------------------------------------------------------------
-
 #define PIN_ASSIGN_IN_1  8
 #define PIN_ASSIGN_IN_2  9
 #define PIN_ASSIGN_IN_3  10
@@ -224,12 +257,9 @@ const int AssignableInputPins[AssignableInSize] = {
   PIN_ASSIGN_IN_3
 };
 
-// ------------------------------------------------------------
 // Physical relay output pins
 // These must match OUT_LOCK_1 through OUT_DRY_4.
 // OUT_HITACHI_VIRTUAL has no physical relay pin.
-// ------------------------------------------------------------
-
 const int OutRly[PhysicalOutSize] = {
   49, // OUT_LOCK_1
   47, // OUT_LOCK_2
@@ -241,17 +271,11 @@ const int OutRly[PhysicalOutSize] = {
   39  // OUT_DRY_4
 };
 
-// ------------------------------------------------------------
 // Global IO state
-// ------------------------------------------------------------
-
 boolean InValues[InSize];
 boolean OutValues[OutSize];
 
-// ------------------------------------------------------------
 // Mode management
-// ------------------------------------------------------------
-
 const byte ModeMax = 1;
 
 struct ModeStruct
@@ -261,10 +285,7 @@ struct ModeStruct
 }
 Mode;
 
-// ------------------------------------------------------------
 // Time / auto-run state
-// ------------------------------------------------------------
-
 struct TimeVariables
 {
   boolean bRunning;
@@ -285,10 +306,7 @@ struct TimeVariables
 }
 TimeVar;
 
-// ------------------------------------------------------------
 // Software command switches
-// ------------------------------------------------------------
-
 struct SoftwareSwitches
 {
   boolean Start;
@@ -297,30 +315,21 @@ struct SoftwareSwitches
 }
 SoftSwitches;
 
-// ------------------------------------------------------------
 // Manual mode state
-// ------------------------------------------------------------
-
 struct manual_mode
 {
   byte out[OutSize];
 }
 Manual;
 
-// ------------------------------------------------------------
 // Mode behavior tables
 // These are indexed by Mode.Current.
-// ------------------------------------------------------------
-
 boolean UseTimingFunctions[] = {
   false,
   true
 };
 
-// ------------------------------------------------------------
 // Hitachi settings/state
-// ------------------------------------------------------------
-
 struct hitachi_Settings
 {
   int modeOff;
@@ -348,10 +357,7 @@ struct hitachi_Settings
 }
 hS;
 
-// ------------------------------------------------------------
 // EROS Flex settings/state
-// ------------------------------------------------------------
-
 struct EROSFlex_Settings
 {
   int OutInIdx[OutSize];
@@ -364,28 +370,7 @@ struct EROSFlex_Settings
 }
 EROSFlexSettings;
 
-// ------------------------------------------------------------
-// Control mode function prototypes
-// ------------------------------------------------------------
-
-void Init_Idle(void);
-void Init_EROSFlex(void);
-
-void Execute_Idle(void);
-void Execute_EROSFlex(void);
-
-void ID_Idle(void);
-void ID_EROSFlex(void);
-
-void Control_Setup(void);
-void Control_Task(void);
-void CheckMode(void);
-void RunMode(void);
-
-// ------------------------------------------------------------
 // Control mode function tables
-// ------------------------------------------------------------
-
 typedef void (* FunctionPointer)();
 
 FunctionPointer InitFunctions[] = {
@@ -403,6 +388,8 @@ FunctionPointer IdleOps[] = {
   ID_EROSFlex
 };
 
+#endif  // EROS_BUILD_HAS_M4_SIDE
+
 // ------------------------------------------------------------
 // Arduino setup / loop
 // ------------------------------------------------------------
@@ -411,24 +398,32 @@ void setup()
 {
   Serial.begin(57600);
 
+#if EROS_BUILD_HAS_M4_SIDE
   // Set up embedded control functions.
   Control_Setup();
+#endif
 
+#if EROS_BUILD_HAS_M7_SIDE
   // Initialize the Giga Display UI.
   GigaDisplay_Setup();
+#endif
 }
 
 void loop()
 {
+#if EROS_BUILD_HAS_M7_SIDE
   // Update the Giga Display UI.
   // UI actions enqueue commands through Command_Send().
   GigaDisplay_Task();
+#endif
 
+#if EROS_BUILD_HAS_M4_SIDE
   // Process any pending UI/control commands.
-  // This is the current single-core command drain point and the future
-  // M4-side command drain point.
+  // In single-core sim this is the command drain point. In an M4-only build,
+  // this is the M4-side transport receive/execute loop.
   State_ProcessPendingCommands();
 
   // Handle embedded control functions.
   Control_Task();
+#endif
 }

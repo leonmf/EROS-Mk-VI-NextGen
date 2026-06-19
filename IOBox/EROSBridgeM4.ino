@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M4_SIDE
+
 /*
   EROSBridgeM4.ino
 
@@ -622,3 +626,5 @@ void Command_Execute(const EROS_Command & command)
       break;
   }
 }
+
+#endif  // EROS_BUILD_HAS_M4_SIDE

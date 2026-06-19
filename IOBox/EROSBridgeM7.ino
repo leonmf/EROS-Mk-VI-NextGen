@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M7_SIDE
+
 /*
   EROSBridgeM7.ino
 
@@ -569,3 +573,4 @@ bool State_IsTransportStatusFresh(unsigned long maxAgeMs)
   return State_GetTransportStatusAgeMs() <= maxAgeMs;
 }
 
+#endif  // EROS_BUILD_HAS_M7_SIDE

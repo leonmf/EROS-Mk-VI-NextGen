@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M4_SIDE
+
 /*
   EROSControl.ino
   Control-side scan wrapper for EROS Mk VI.
@@ -140,3 +144,5 @@ void RunMode()
 
   SetOutputs();
 }
+
+#endif  // EROS_BUILD_HAS_M4_SIDE

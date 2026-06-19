@@ -1,3 +1,7 @@
+#include "EROSShared.h"
+
+#if EROS_BUILD_HAS_M4_SIDE
+
 // apply the calibration to the sensor reading
 //  sensorValue = map(sensorValue, sensorMin, sensorMax, 0, 255);
 
@@ -45,5 +49,4 @@ void Execute_Idle()
   }
 }
 
-
-
+#endif  // EROS_BUILD_HAS_M4_SIDE
