@@ -71,6 +71,22 @@ struct EROS_Command
 };
 
 // ------------------------------------------------------------
+// Command queue
+//
+// For now this queue is drained immediately after Command_Send().
+// Later, Command_Send() can become the M7-side enqueue/send function,
+// while the M4 side drains and executes the commands.
+// ------------------------------------------------------------
+
+const int EROS_COMMAND_QUEUE_SIZE = 16;
+
+static EROS_Command g_commandQueue[EROS_COMMAND_QUEUE_SIZE];
+static int g_commandQueueHead = 0;
+static int g_commandQueueTail = 0;
+static int g_commandQueueCount = 0;
+static bool g_processingCommands = false;
+
+// ------------------------------------------------------------
 // Control status snapshot
 //
 // For now this is refreshed from the existing globals.
@@ -83,19 +99,96 @@ struct EROS_ControlStatus
   bool assignableInput[AssignableInSize];
   bool output[OutSize];
 
+  bool manualOutputRequest[OutSize];
+
+  byte mode;
+
   bool autoRunning;
   bool autoPaused;
 
   unsigned int autoRemainingTime;
   unsigned int autoCurrentTime;
   unsigned int autoRunDuration;
+  unsigned int autoPauseDuration;
+  unsigned int autoPenaltyDuration;
+
+  unsigned int autoIoOnTimeMs;
+  unsigned int autoIoOffTimeMs;
+
+  byte autoOutputMode[OutSize];
+  int autoOutputInputIndex[OutSize];
 
   int hitachiCurrentOutput;
+
+  int hitachiModeOn;
+  int hitachiModeOff;
+
+  int hitachiSetPointOn;
+  int hitachiSetPointOff;
+
+  int hitachiMaxValueOn;
+  int hitachiMaxValueOff;
+
+  int hitachiMinValueOn;
+  int hitachiMinValueOff;
+
+  int hitachiPeriodOn;
+  int hitachiPeriodOff;
+
+  bool hitachiPeriodPreciseOn;
+  bool hitachiPeriodPreciseOff;
+
+  int hitachiMinRelayValue;
 };
 
 static EROS_ControlStatus g_controlStatus;
 
 void Command_Execute(const EROS_Command & command);
+void State_RefreshControlStatus();
+void State_ProcessPendingCommands();
+
+static bool Command_QueuePush(const EROS_Command & command);
+static bool Command_QueuePop(EROS_Command & command);
+
+static bool Command_QueuePush(const EROS_Command & command)
+{
+  if (g_commandQueueCount >= EROS_COMMAND_QUEUE_SIZE)
+  {
+    return false;
+  }
+
+  g_commandQueue[g_commandQueueTail] = command;
+  g_commandQueueTail++;
+
+  if (g_commandQueueTail >= EROS_COMMAND_QUEUE_SIZE)
+  {
+    g_commandQueueTail = 0;
+  }
+
+  g_commandQueueCount++;
+
+  return true;
+}
+
+static bool Command_QueuePop(EROS_Command & command)
+{
+  if (g_commandQueueCount <= 0)
+  {
+    return false;
+  }
+
+  command = g_commandQueue[g_commandQueueHead];
+  g_commandQueueHead++;
+
+  if (g_commandQueueHead >= EROS_COMMAND_QUEUE_SIZE)
+  {
+    g_commandQueueHead = 0;
+  }
+
+  g_commandQueueCount--;
+
+  return true;
+}
 
 static void Command_Send(
   EROS_CommandType type,
@@ -113,7 +206,45 @@ static void Command_Send(
   command.boolValue = boolValue;
   command.onSettings = onSettings;
 
-  Command_Execute(command);
+  if (!Command_QueuePush(command))
+  {
+    // Queue overflow should not silently drop operator commands.
+    // For this single-core transition phase, execute immediately as a fallback.
+    Command_Execute(command);
+    State_RefreshControlStatus();
+    return;
+  }
+
+  // For now, preserve the existing immediate behavior.
+  // Later, this call can be removed and the control core can call
+  // State_ProcessPendingCommands() from its own task loop.
+  State_ProcessPendingCommands();
+}
+
+void State_ProcessPendingCommands()
+{
+  if (g_processingCommands)
+  {
+    return;
+  }
+
+  g_processingCommands = true;
+
+  bool processedAnyCommand = false;
+  EROS_Command command;
+
+  while (Command_QueuePop(command))
+  {
+    Command_Execute(command);
+    processedAnyCommand = true;
+  }
+
+  g_processingCommands = false;
+
+  if (processedAnyCommand)
+  {
+    State_RefreshControlStatus();
+  }
 }
 
 void State_RefreshControlStatus()
@@ -133,7 +264,10 @@ void State_RefreshControlStatus()
   for (int i = 0; i < OutSize; i++)
   {
     g_controlStatus.output[i] = OutValues[i];
+    g_controlStatus.manualOutputRequest[i] = Manual.out[i];
   }
+
+  g_controlStatus.mode = Mode.Current;
 
   g_controlStatus.autoRunning = TimeVar.bRunning;
   g_controlStatus.autoPaused = TimeVar.bPaused;
@@ -141,13 +275,45 @@ void State_RefreshControlStatus()
   g_controlStatus.autoRemainingTime = TimeVar.iRemainingTime;
   g_controlStatus.autoCurrentTime = TimeVar.iCurrentTime;
   g_controlStatus.autoRunDuration = TimeVar.iRunDuration;
+  g_controlStatus.autoPauseDuration = TimeVar.iPauseDuration;
+  g_controlStatus.autoPenaltyDuration = TimeVar.iPenaltyDuration;
+
+  g_controlStatus.autoIoOnTimeMs = EROSFlexSettings.OnTime;
+  g_controlStatus.autoIoOffTimeMs = EROSFlexSettings.OffTime;
+
+  for (int i = 0; i < OutSize; i++)
+  {
+    g_controlStatus.autoOutputMode[i] = EROSFlexSettings.OutMode[i];
+    g_controlStatus.autoOutputInputIndex[i] = EROSFlexSettings.OutInIdx[i];
+  }
 
   g_controlStatus.hitachiCurrentOutput = hS.currentOutput;
+
+  g_controlStatus.hitachiModeOn = hS.modeOn;
+  g_controlStatus.hitachiModeOff = hS.modeOff;
+
+  g_controlStatus.hitachiSetPointOn = hS.setPointOn;
+  g_controlStatus.hitachiSetPointOff = hS.setPointOff;
+
+  g_controlStatus.hitachiMaxValueOn = hS.maxValueOn;
+  g_controlStatus.hitachiMaxValueOff = hS.maxValueOff;
+
+  g_controlStatus.hitachiMinValueOn = hS.minValueOn;
+  g_controlStatus.hitachiMinValueOff = hS.minValueOff;
+
+  g_controlStatus.hitachiPeriodOn = hS.periodOn;
+  g_controlStatus.hitachiPeriodOff = hS.periodOff;
+
+  g_controlStatus.hitachiPeriodPreciseOn = hS.periodPreciseOn;
+  g_controlStatus.hitachiPeriodPreciseOff = hS.periodPreciseOff;
+
+  g_controlStatus.hitachiMinRelayValue = hS.minRelayValue;
 }
 
 // ------------------------------------------------------------
 // Input / Output state
 // ------------------------------------------------------------
+
 bool State_GetInput(int inputIndex)
 {
   if (inputIndex < 0 || inputIndex >= InSize) {
@@ -174,7 +340,7 @@ bool State_GetAssignedInputForOutput(int outputIndex)
     return false;
   }
 
-  int inputIndex = EROSFlexSettings.OutInIdx[outputIndex];
+  int inputIndex = g_controlStatus.autoOutputInputIndex[outputIndex];
 
   if (inputIndex < 0 || inputIndex >= AssignableInSize)
   {
@@ -199,7 +365,7 @@ bool State_GetManualOutputRequest(int outputIndex)
     return false;
   }
 
-  return Manual.out[outputIndex];
+  return g_controlStatus.manualOutputRequest[outputIndex];
 }
 
 static void Command_ApplySetManualOutput(int outputIndex, bool state)
@@ -304,7 +470,7 @@ void Command_SetMode(byte mode)
 
 byte State_GetMode()
 {
-  return Mode.Current;
+  return g_controlStatus.mode;
 }
 
 // ------------------------------------------------------------
@@ -338,7 +504,7 @@ static int * State_HitachiPeriodPtr(bool onSettings)
 
 int State_GetHitachiMode(bool onSettings)
 {
-  return *State_HitachiModePtr(onSettings);
+  return onSettings ? g_controlStatus.hitachiModeOn : g_controlStatus.hitachiModeOff;
 }
 
 static void Command_ApplySetHitachiMode(bool onSettings, int mode)
@@ -353,7 +519,7 @@ void Command_SetHitachiMode(bool onSettings, int mode)
 
 int State_GetHitachiSetPoint(bool onSettings)
 {
-  return *State_HitachiSetPointPtr(onSettings);
+  return onSettings ? g_controlStatus.hitachiSetPointOn : g_controlStatus.hitachiSetPointOff;
 }
 
 static void Command_ApplySetHitachiSetPoint(bool onSettings, int value)
@@ -378,7 +544,7 @@ void Command_SetHitachiMaxValue(bool onSettings, int value)
 
 int State_GetHitachiMaxValue(bool onSettings)
 {
-  return *State_HitachiMaxValuePtr(onSettings);
+  return onSettings ? g_controlStatus.hitachiMaxValueOn : g_controlStatus.hitachiMaxValueOff;
 }
 
 static void Command_ApplySetHitachiMinValue(bool onSettings, int value)
@@ -393,12 +559,12 @@ void Command_SetHitachiMinValue(bool onSettings, int value)
 
 int State_GetHitachiMinValue(bool onSettings)
 {
-  return *State_HitachiMinValuePtr(onSettings);
+  return onSettings ? g_controlStatus.hitachiMinValueOn : g_controlStatus.hitachiMinValueOff;
 }
 
 int State_GetHitachiPeriod(bool onSettings)
 {
-  return *State_HitachiPeriodPtr(onSettings);
+  return onSettings ? g_controlStatus.hitachiPeriodOn : g_controlStatus.hitachiPeriodOff;
 }
 
 static void Command_ApplySetHitachiPeriod(bool onSettings, long periodMs)
@@ -413,7 +579,7 @@ void Command_SetHitachiPeriod(bool onSettings, int periodMs)
 
 bool State_GetHitachiPeriodPrecise(bool onSettings)
 {
-  return onSettings ? hS.periodPreciseOn : hS.periodPreciseOff;
+  return onSettings ? g_controlStatus.hitachiPeriodPreciseOn : g_controlStatus.hitachiPeriodPreciseOff;
 }
 
 static void Command_ApplySetHitachiPeriodPrecise(bool onSettings, bool precise)
@@ -428,10 +594,12 @@ static void Command_ApplySetHitachiPeriodPrecise(bool onSettings, bool precise)
 
 static void Command_ApplyToggleHitachiPeriodPrecise(bool onSettings)
 {
-  Command_ApplySetHitachiPeriodPrecise(
-    onSettings,
-    !State_GetHitachiPeriodPrecise(onSettings)
-  );
+  if (onSettings) {
+    Command_ApplySetHitachiPeriodPrecise(true, !hS.periodPreciseOn);
+  }
+  else {
+    Command_ApplySetHitachiPeriodPrecise(false, !hS.periodPreciseOff);
+  }
 }
 
 void Command_SetHitachiPeriodPrecise(bool onSettings, bool precise)
@@ -443,7 +611,6 @@ void Command_ToggleHitachiPeriodPrecise(bool onSettings)
 {
   Command_Send(EROS_CMD_TOGGLE_HITACHI_PERIOD_PRECISE, 0, 0, false, onSettings);
 }
-
 
 void Command_NormalizeHitachiSettings()
 {
@@ -475,7 +642,7 @@ int State_GetHitachiCurrentOutput()
 
 int State_GetHitachiMinRelayValue()
 {
-  return hS.minRelayValue;
+  return g_controlStatus.hitachiMinRelayValue;
 }
 
 static void Command_ApplySetHitachiMinRelayValue(int value)
@@ -585,7 +752,7 @@ unsigned int State_GetAutoRunDuration()
 
 unsigned int State_GetAutoRunDurationSeconds()
 {
-  return TimeVar.iRunDuration;
+  return g_controlStatus.autoRunDuration;
 }
 
 static void Command_ApplySetAutoRunDurationMinutes(unsigned int minutes)
@@ -601,12 +768,12 @@ void Command_SetAutoRunDurationMinutes(unsigned int minutes)
 
 unsigned int State_GetAutoRunDurationMinutes()
 {
-  return TimeVar.iRunDuration / 60;
+  return g_controlStatus.autoRunDuration / 60;
 }
 
 unsigned int State_GetAutoPauseDurationSeconds()
 {
-  return TimeVar.iPauseDuration;
+  return g_controlStatus.autoPauseDuration;
 }
 
 static void Command_ApplySetAutoPauseDurationSeconds(unsigned int seconds)
@@ -621,7 +788,7 @@ void Command_SetAutoPauseDurationSeconds(unsigned int seconds)
 
 unsigned int State_GetAutoPenaltyDurationSeconds()
 {
-  return TimeVar.iPenaltyDuration;
+  return g_controlStatus.autoPenaltyDuration;
 }
 
 static void Command_ApplySetAutoPenaltyDurationSeconds(unsigned int seconds)
@@ -636,7 +803,7 @@ void Command_SetAutoPenaltyDurationSeconds(unsigned int seconds)
 
 unsigned int State_GetAutoIoOnTimeMs()
 {
-  return EROSFlexSettings.OnTime;
+  return g_controlStatus.autoIoOnTimeMs;
 }
 
 static void Command_ApplySetAutoIoOnTimeMs(unsigned int ms)
@@ -651,7 +818,7 @@ void Command_SetAutoIoOnTimeMs(unsigned int ms)
 
 unsigned int State_GetAutoIoOffTimeMs()
 {
-  return EROSFlexSettings.OffTime;
+  return g_controlStatus.autoIoOffTimeMs;
 }
 
 static void Command_ApplySetAutoIoOffTimeMs(unsigned int ms)
@@ -670,7 +837,7 @@ byte State_GetAutoOutputMode(int outputIndex)
     return 0;
   }
 
-  return EROSFlexSettings.OutMode[outputIndex];
+  return g_controlStatus.autoOutputMode[outputIndex];
 }
 
 static void Command_ApplySetAutoOutputMode(int outputIndex, byte mode)
@@ -708,7 +875,7 @@ int State_GetAutoOutputInputIndex(int outputIndex)
     return 0;
   }
 
-  int inputIndex = EROSFlexSettings.OutInIdx[outputIndex];
+  int inputIndex = g_controlStatus.autoOutputInputIndex[outputIndex];
 
   if (inputIndex < 0 || inputIndex >= AssignableInSize)
   {
