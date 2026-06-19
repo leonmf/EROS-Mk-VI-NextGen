@@ -21,7 +21,9 @@
 // ------------------------------------------------------------
 // Command queue
 //
-// For now this queue is drained immediately after Command_Send().
+// Commands are submitted here as packets.
+// In the current single-core build, loop() drains this queue by calling
+// State_ProcessPendingCommands().
 // Later, Command_Send() can become the M7-side enqueue/send function,
 // while the M4 side drains and executes the commands.
 // ------------------------------------------------------------
@@ -38,15 +40,16 @@ static bool g_processingCommands = false;
 //
 // true:
 //   Command_Send() submits a command packet and immediately drains the queue.
-//   This keeps LVGL slider callbacks synchronous.
 //
 // false:
 //   Command_Send() only submits the command packet. The control side must call
 //   State_ProcessPendingCommands() from its task loop.
 //
+// This phase uses false so the sketch behaves more like the future M7/M4 split
+// while still running on one core.
 // Later, the M7 build should behave like false, and the M4 build should own
 // State_ProcessPendingCommands().
-static const bool EROS_SINGLE_CORE_IMMEDIATE_COMMAND_PROCESSING = true;
+static const bool EROS_SINGLE_CORE_IMMEDIATE_COMMAND_PROCESSING = false;
 
 static EROS_ControlStatus g_controlStatus;
 
@@ -133,9 +136,6 @@ static void Command_Send(
 
   if (EROS_SINGLE_CORE_IMMEDIATE_COMMAND_PROCESSING)
   {
-    // Single-core compatibility:
-    // LVGL slider callbacks expect the state snapshot to be current before the
-    // callback finishes. Drain immediately for now.
     State_ProcessPendingCommands();
   }
 }

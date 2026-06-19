@@ -400,8 +400,8 @@ void loop()
   GigaDisplay_Task();
 
   // Process any pending UI/control commands.
-  // Usually empty while Command_Send() drains immediately, but this is the
-  // future M4-side command drain point.
+  // This is the current single-core command drain point and the future
+  // M4-side command drain point.
   State_ProcessPendingCommands();
 
   // Handle embedded control functions.

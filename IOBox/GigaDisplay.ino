@@ -146,6 +146,7 @@ static bool g_hitachiRelayMinScreenBuilt = false;
 
 static bool g_hitachiEditingOnSettings = true;
 static bool g_hitachiUiRefreshing = false;
+static bool g_hitachiSkipNextAutoRefresh = false;
 static bool g_hitachiPeriodPreciseMode = true;
 
 
@@ -268,6 +269,7 @@ static void GigaDisplay_DestroyAutoSettingsScreen();
 static void GigaDisplay_DestroyHitachiScreen();
 
 static void GigaDisplay_UpdateHitachiScreen();
+static void GigaDisplay_UpdateHitachiSliderLabelsFromWidgets();
 static void GigaDisplay_UpdateHitachiRelayMinScreen();
 static void GigaDisplay_UpdateAutoScreen();
 static void GigaDisplay_UpdateAutoSettingsScreen();
@@ -694,7 +696,15 @@ void GigaDisplay_Task()
     //Serial.println("Auto Screen");
   }
   else if (lv_scr_act() == g_hitachiScreen) {
-    GigaDisplay_UpdateHitachiScreen();
+    if (g_hitachiSkipNextAutoRefresh) {
+      // A Hitachi slider callback just queued a command.
+      // Skip this one automatic refresh so the UI does not redraw from the
+      // previous status snapshot before loop() drains the command queue.
+      g_hitachiSkipNextAutoRefresh = false;
+    }
+    else {
+      GigaDisplay_UpdateHitachiScreen();
+    }
     //Serial.println("Hitachi Screen");
   }
 
@@ -1482,6 +1492,36 @@ static void GigaDisplay_UpdateHitachiScreen()
   g_hitachiUiRefreshing = false;
 }
 
+static void GigaDisplay_UpdateHitachiSliderLabelsFromWidgets()
+{
+  if (!g_hitachiScreenBuilt) {
+    return;
+  }
+
+  char buffer[32];
+
+  if (g_hitachiSetPointSlider != NULL && g_hitachiSetPointValueLabel != NULL) {
+    snprintf(buffer, sizeof(buffer), "%d%%", lv_slider_get_value(g_hitachiSetPointSlider));
+    lv_label_set_text(g_hitachiSetPointValueLabel, buffer);
+  }
+
+  if (g_hitachiMaxSlider != NULL && g_hitachiMaxValueLabel != NULL) {
+    snprintf(buffer, sizeof(buffer), "%d%%", lv_slider_get_value(g_hitachiMaxSlider));
+    lv_label_set_text(g_hitachiMaxValueLabel, buffer);
+  }
+
+  if (g_hitachiMinSlider != NULL && g_hitachiMinValueLabel != NULL) {
+    snprintf(buffer, sizeof(buffer), "%d%%", lv_slider_get_value(g_hitachiMinSlider));
+    lv_label_set_text(g_hitachiMinValueLabel, buffer);
+  }
+
+  if (g_hitachiPeriodSlider != NULL && g_hitachiPeriodValueLabel != NULL) {
+    int periodMs = Hitachi_PeriodSliderToMs(lv_slider_get_value(g_hitachiPeriodSlider));
+    Hitachi_FormatPeriod(buffer, sizeof(buffer), periodMs);
+    lv_label_set_text(g_hitachiPeriodValueLabel, buffer);
+  }
+}
+
 // ------------------------------------------------------------
 // Hitachi Min Relay screen
 // ------------------------------------------------------------
@@ -1722,35 +1762,37 @@ static void HitachiSlider_Event(lv_event_t * e)
   }
 
   lv_obj_t * slider = (lv_obj_t *)lv_event_get_target(e);
+  int minRelayValue = State_GetHitachiMinRelayValue();
+  int sliderValue = lv_slider_get_value(slider);
 
   if (slider == g_hitachiSetPointSlider) {
-    Command_SetHitachiSetPoint(
-      g_hitachiEditingOnSettings,
-      constrain(lv_slider_get_value(slider), State_GetHitachiMinRelayValue(), 100)
-    );
+    sliderValue = constrain(sliderValue, minRelayValue, 100);
+    lv_slider_set_value(g_hitachiSetPointSlider, sliderValue, LV_ANIM_OFF);
+    Command_SetHitachiSetPoint(g_hitachiEditingOnSettings, sliderValue);
   }
   else if (slider == g_hitachiMaxSlider) {
-    Command_SetHitachiMaxValue(
-      g_hitachiEditingOnSettings,
-      constrain(lv_slider_get_value(slider), State_GetHitachiMinRelayValue(), 100)
-    );
+    sliderValue = constrain(sliderValue, minRelayValue, 100);
+    lv_slider_set_value(g_hitachiMaxSlider, sliderValue, LV_ANIM_OFF);
+    Command_SetHitachiMaxValue(g_hitachiEditingOnSettings, sliderValue);
   }
   else if (slider == g_hitachiMinSlider) {
-    Command_SetHitachiMinValue(
-      g_hitachiEditingOnSettings,
-      constrain(lv_slider_get_value(slider), State_GetHitachiMinRelayValue(), 100)
-    );
+    sliderValue = constrain(sliderValue, minRelayValue, 100);
+    lv_slider_set_value(g_hitachiMinSlider, sliderValue, LV_ANIM_OFF);
+    Command_SetHitachiMinValue(g_hitachiEditingOnSettings, sliderValue);
   }
   else if (slider == g_hitachiPeriodSlider) {
-    int sliderValue = lv_slider_get_value(slider);
-
     Command_SetHitachiPeriod(
       g_hitachiEditingOnSettings,
       Hitachi_PeriodSliderToMs(sliderValue)
     );
   }
 
-  GigaDisplay_UpdateHitachiScreen();
+  // Update the visible slider text from the event/widget values immediately.
+  // Do not call GigaDisplay_UpdateHitachiScreen() here, because when commands
+  // are deferred it would read the previous status snapshot and snap the
+  // slider back before loop() has processed the command queue.
+  GigaDisplay_UpdateHitachiSliderLabelsFromWidgets();
+  g_hitachiSkipNextAutoRefresh = true;
 }
 
 static void HitachiPeriodModeButton_Event(lv_event_t * e)
