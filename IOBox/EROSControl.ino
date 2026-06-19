@@ -104,8 +104,6 @@ void CheckMode()
     
     TimeVar.bRunning = false;
     TimeVar.bPaused = false;
-    //Cause the IO display to be regenerated
-    InitIODisplay = true;
   }  
 }
 

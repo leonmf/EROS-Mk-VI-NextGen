@@ -77,10 +77,6 @@ int Settings_GetLastError()
   return g_settingsLastError;
 }
 
-int Settings_GetMountedPartition()
-{
-  return g_settingsMountedPartition;
-}
 
 bool Settings_Begin()
 {
@@ -408,21 +404,3 @@ bool Settings_LoadAllOrDefaults()
   return false;
 }
 
-// ------------------------------------------------------------
-// Legacy compatibility wrappers
-// ------------------------------------------------------------
-
-void LoadSettings()
-{
-  Settings_LoadAllOrDefaults();
-}
-
-void SaveSettings()
-{
-  Settings_SaveAll();
-}
-
-void WriteDefaults()
-{
-  Settings_LoadDefaults();
-}

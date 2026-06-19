@@ -213,36 +213,3 @@ void GigaDimmer_enable(bool enabled)
   }
 }
 
-// ------------------------------------------------------------
-// Diagnostics
-// ------------------------------------------------------------
-
-uint8_t GigaDimmer_getPower()
-{
-  return g_dimmerPowerPercent;
-}
-
-bool GigaDimmer_isEnabled()
-{
-  return g_dimmerEnabled;
-}
-
-uint32_t GigaDimmer_getFireDelayUs()
-{
-  return g_dimmerFireDelayUs;
-}
-
-unsigned long GigaDimmer_getZeroCrossCount()
-{
-  return g_zeroCrossCount;
-}
-
-unsigned long GigaDimmer_getFireCount()
-{
-  return g_fireCount;
-}
-
-unsigned long GigaDimmer_getGateOffCount()
-{
-  return g_gateOffCount;
-}

@@ -52,7 +52,6 @@ void Time_Interrupt()
     if (TimeVar.iCurrentTime >= TimeVar.iWorkingRunDuration || TimeVar.iCurrentTime == 65535)
     {
       TimeVar.bRunning = false;
-      TimeVar.bForceClear = true;
     }
   }
   else if (TimeVar.bRunning == true && TimeVar.bPaused == true)
@@ -89,13 +88,11 @@ void Time_Interrupt()
   {
     TimeVar.iRemainingTime = TimeVar.iWorkingRunDuration - TimeVar.iCurrentTime;
   }
-  
-  TimeVar.bRefreshDisplay = true;
 }
 
 bool ButtonInRange(int input)
 {
-  return (input >= 0 && input <= 2);
+  return (input >= 0 && input < InSize);
 }
 
 void CheckPauseButton(int PauseInput)

@@ -199,10 +199,3 @@ boolean ToggleFlex(int idx, boolean bValue, boolean bRandom)
   return bReturn;
 }
 
-
-
-void Post_EROSFlex()
-{
-  ;
-}
-

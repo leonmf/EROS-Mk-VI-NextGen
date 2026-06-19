@@ -1902,21 +1902,3 @@ static void LoadSettingsButton_Event(lv_event_t * e)
 
 
 
-// ------------------------------------------------------------
-// Replacement stubs for old LCD API
-// ------------------------------------------------------------
-
-void InitLCD()
-{
-  GigaDisplay_Setup();
-}
-
-
-
-void DisplayIO(int DigitalRow, boolean first)
-{
-  if (g_displayInitialized && lv_scr_act() == g_manualScreen) {
-    GigaDisplay_UpdateManualIndicators();
-  }
-}
-
