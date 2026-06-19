@@ -154,6 +154,7 @@ static bool g_hitachiUiRefreshing = false;
 static bool g_hitachiSkipNextAutoRefresh = false;
 static bool g_hitachiPeriodPreciseMode = true;
 static int g_hitachiRelayMinUiValue = 25;
+static unsigned long g_lastDisplayedSettingsResultCounter = 0;
 
 
 // ------------------------------------------------------------
@@ -283,6 +284,7 @@ static void GigaDisplay_UpdateAutoSettingsScreen();
 static void GigaDisplay_UpdateAutoSettingsSliderLabelsFromWidgets();
 static void GigaDisplay_UpdateAutoOutputModeLabel(int outputIndex, byte mode);
 static void GigaDisplay_UpdateAutoOutputInputLabel(int outputIndex, int inputIndex);
+static void GigaDisplay_UpdateIdleSettingsResult();
 
 static void ManualButton_Event(lv_event_t * e);
 static void AutoButton_Event(lv_event_t * e);
@@ -656,6 +658,40 @@ static void SetIdleStatusError(const char * prefix)
   lv_label_set_text(g_idleStatusLabel, buffer);
 }
 
+static void GigaDisplay_UpdateIdleSettingsResult()
+{
+  unsigned long resultCounter = State_GetSettingsResultCounter();
+
+  if (resultCounter == g_lastDisplayedSettingsResultCounter)
+  {
+    return;
+  }
+
+  g_lastDisplayedSettingsResultCounter = resultCounter;
+
+  byte action = State_GetSettingsLastAction();
+  bool ok = State_GetSettingsLastOk();
+
+  if (action == EROS_SETTINGS_ACTION_SAVE)
+  {
+    if (ok) {
+      SetIdleStatusText("Settings saved");
+    }
+    else {
+      SetIdleStatusError("Save failed");
+    }
+  }
+  else if (action == EROS_SETTINGS_ACTION_LOAD)
+  {
+    if (ok) {
+      SetIdleStatusText("Settings loaded");
+    }
+    else {
+      SetIdleStatusError("Load failed");
+    }
+  }
+}
+
 // ------------------------------------------------------------
 // Public display setup / task functions
 // ------------------------------------------------------------
@@ -696,6 +732,10 @@ void GigaDisplay_Task()
   lv_timer_handler();
 
   //Serial.println("Timer Handler");
+
+  if (lv_scr_act() == g_idleScreen) {
+    GigaDisplay_UpdateIdleSettingsResult();
+  }
 
   if (lv_scr_act() == g_manualScreen) {
     if (g_manualSkipNextAutoRefresh) {
@@ -1989,26 +2029,14 @@ static void HitachiRelayMinBackButton_Event(lv_event_t * e)
 
 static void SaveSettingsButton_Event(lv_event_t * e)
 {
-  bool ok = Command_RequestSettingsSave();
-
-  if (ok) {
-    SetIdleStatusText("Settings saved");
-  }
-  else {
-    SetIdleStatusError("Save failed");
-  }
+  Command_RequestSettingsSave();
+  SetIdleStatusText("Save requested");
 }
 
 static void LoadSettingsButton_Event(lv_event_t * e)
 {
-  bool ok = Command_RequestSettingsLoad();
-
-  if (ok) {
-    SetIdleStatusText("Settings loaded");
-  }
-  else {
-    SetIdleStatusError("Load failed");
-  }
+  Command_RequestSettingsLoad();
+  SetIdleStatusText("Load requested");
 }
 
 // ------------------------------------------------------------

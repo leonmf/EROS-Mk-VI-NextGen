@@ -70,12 +70,12 @@ void Execute_EROSFlex()
       case 2:
         //Normal
         //OutValues[i] = InValues[EROSFlexSettings.OutInIdx[i]];   
-        OutValues[i] = State_GetAssignedInputForOutput(i);   
+        OutValues[i] = Control_GetAssignedInputForOutput(i);   
         break;
       case 3:
         //Invert
         //OutValues[i] = !InValues[EROSFlexSettings.OutInIdx[i]];
-        OutValues[i] = !State_GetAssignedInputForOutput(i);
+        OutValues[i] = !Control_GetAssignedInputForOutput(i);
         break;
       case 4:
         //Pulse
@@ -88,7 +88,7 @@ void Execute_EROSFlex()
       case 6:
         //Pulse Input
         //if (InValues[EROSFlexSettings.OutInIdx[i]] == true)
-        if (State_GetAssignedInputForOutput(i) == true)
+        if (Control_GetAssignedInputForOutput(i) == true)
         {
           OutValues[i] = ToggleFlex(i, OutValues[i], false);
         }
@@ -100,7 +100,7 @@ void Execute_EROSFlex()
       case 7:
         //Pulse Invert
         //if (InValues[EROSFlexSettings.OutInIdx[i]] == false)
-        if (State_GetAssignedInputForOutput(i) == false)
+        if (Control_GetAssignedInputForOutput(i) == false)
         {
           OutValues[i] = ToggleFlex(i, OutValues[i], false);
         }
@@ -112,7 +112,7 @@ void Execute_EROSFlex()
       case 8:
         //Random Input
         //if (InValues[EROSFlexSettings.OutInIdx[i]] == true)
-        if (State_GetAssignedInputForOutput(i) == true)
+        if (Control_GetAssignedInputForOutput(i) == true)
         {
           OutValues[i] = ToggleFlex(i, OutValues[i], true);
         }
@@ -124,7 +124,7 @@ void Execute_EROSFlex()
       case 9:
         //Random Input Invert
         //if (InValues[EROSFlexSettings.OutInIdx[i]] == false)
-        if (State_GetAssignedInputForOutput(i) == false)
+        if (Control_GetAssignedInputForOutput(i) == false)
         {
           OutValues[i] = ToggleFlex(i, OutValues[i], true);
         }

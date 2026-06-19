@@ -6,7 +6,8 @@
 
 void Init_Idle()
 {
-  GigaDisplay_ShowIdleScreen();
+  // Control-side mode init only.
+  // Screen navigation is owned by the M7 display side.
 }
 
 //Mode Display

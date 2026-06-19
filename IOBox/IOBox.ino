@@ -74,8 +74,11 @@ byte State_GetMode();
 
 // Settings state / commands
 int State_GetSettingsLastError();
-bool Command_RequestSettingsSave();
-bool Command_RequestSettingsLoad();
+byte State_GetSettingsLastAction();
+bool State_GetSettingsLastOk();
+unsigned long State_GetSettingsResultCounter();
+void Command_RequestSettingsSave();
+void Command_RequestSettingsLoad();
 
 // Status snapshot and command queue processing
 bool Command_SubmitToControl(const EROS_Command & command);
@@ -83,6 +86,7 @@ void State_RefreshControlStatus();
 void State_ProcessPendingCommands();
 void State_CopyControlStatus(EROS_ControlStatus & status);
 void State_ApplyControlStatus(const EROS_ControlStatus & status);
+bool Control_GetAssignedInputForOutput(int outputIndex);
 
 // Hitachi state / commands
 int State_GetHitachiMode(bool onSettings);

@@ -83,6 +83,15 @@ static const char* const AssignableInputLabels[AssignableInSize] = {
 #define hitachiTriangle         5
 #define hitachiRandom           6
 
+
+// ------------------------------------------------------------
+// Settings result values
+// ------------------------------------------------------------
+
+#define EROS_SETTINGS_ACTION_NONE      0
+#define EROS_SETTINGS_ACTION_SAVE      1
+#define EROS_SETTINGS_ACTION_LOAD      2
+
 // ------------------------------------------------------------
 // Command packet definitions
 //
@@ -189,6 +198,11 @@ struct EROS_ControlStatus
   bool hitachiPeriodPreciseOff;
 
   int hitachiMinRelayValue;
+
+  byte settingsLastAction;
+  bool settingsLastOk;
+  int settingsLastError;
+  unsigned long settingsResultCounter;
 };
 
 #endif
