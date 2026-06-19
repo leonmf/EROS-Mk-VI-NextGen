@@ -16,19 +16,8 @@
       and SetOutputs(), because pin 53 is part of the normal output array.
 */
 
+#include "EROSShared.h"
 #include <mbed.h>
-
-// ------------------------------------------------------------
-// Pin definitions
-// ------------------------------------------------------------
-
-#ifndef DIMMER_ZC_PIN
-#define DIMMER_ZC_PIN    2
-#endif
-
-#ifndef DIMMER_GATE_PIN
-#define DIMMER_GATE_PIN  3
-#endif
 
 // ------------------------------------------------------------
 // Timing constants

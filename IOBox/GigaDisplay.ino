@@ -30,6 +30,7 @@
     - Back button returns to previous screen
 */
 
+#include "EROSShared.h"
 #include "Arduino_H7_Video.h"
 #include "Arduino_GigaDisplayTouch.h"
 #include "lvgl.h"
@@ -40,79 +41,6 @@
 
 Arduino_H7_Video Display(800, 480, GigaDisplayShield);
 Arduino_GigaDisplayTouch TouchDetector;
-
-// ------------------------------------------------------------
-// Output indexes
-// These must match the logical output order in IOBox.ino
-// ------------------------------------------------------------
-
-#ifndef OUT_LOCK_1
-#define OUT_LOCK_1              0
-#endif
-
-#ifndef OUT_LOCK_2
-#define OUT_LOCK_2              1
-#endif
-
-#ifndef OUT_AC
-#define OUT_AC                  2
-#endif
-
-#ifndef OUT_DIMMER_ENABLE
-#define OUT_DIMMER_ENABLE  3
-#endif
-
-#ifndef OUT_DRY_1
-#define OUT_DRY_1               4
-#endif
-
-#ifndef OUT_DRY_2
-#define OUT_DRY_2               5
-#endif
-
-#ifndef OUT_DRY_3
-#define OUT_DRY_3               6
-#endif
-
-#ifndef OUT_DRY_4
-#define OUT_DRY_4               7
-#endif
-
-#ifndef OUT_HITACHI_VIRTUAL
-#define OUT_HITACHI_VIRTUAL     8
-#endif
-
-// ------------------------------------------------------------
-// Hitachi mode fallback defines
-// ------------------------------------------------------------
-
-#ifndef hitachiOff
-#define hitachiOff       0
-#endif
-
-#ifndef hitachiValue
-#define hitachiValue     1
-#endif
-
-#ifndef hitachiPulse
-#define hitachiPulse     2
-#endif
-
-#ifndef hitachiSine
-#define hitachiSine      3
-#endif
-
-#ifndef hitachiSawTooth
-#define hitachiSawTooth  4
-#endif
-
-#ifndef hitachiTriangle
-#define hitachiTriangle  5
-#endif
-
-#ifndef hitachiRandom
-#define hitachiRandom    6
-#endif
 
 // ------------------------------------------------------------
 // Screen object pointers

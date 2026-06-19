@@ -28,64 +28,12 @@
 // Core includes
 // ------------------------------------------------------------
 
+#include "EROSShared.h"
 #include "Arduino_H7_Video.h"
 #include "Arduino_GigaDisplayTouch.h"
 #include "lvgl.h"
 #include <mbed.h>
 #include <string.h>
-
-// ------------------------------------------------------------
-// IO sizing
-// ------------------------------------------------------------
-
-#define InSize 3
-
-// PhysicalOutSize is the number of real relay outputs in OutRly[].
-#define PhysicalOutSize 8
-
-// OutSize is the number of logical outputs.
-// This includes the 8 physical outputs plus the virtual Hitachi output.
-#define OutSize 9
-
-// ------------------------------------------------------------
-// Output indexes
-// ------------------------------------------------------------
-
-#define OUT_LOCK_1              0
-#define OUT_LOCK_2              1
-#define OUT_AC                  2
-#define OUT_DIMMER_ENABLE       3
-#define OUT_DRY_1               4
-#define OUT_DRY_2               5
-#define OUT_DRY_3               6
-#define OUT_DRY_4               7
-#define OUT_HITACHI_VIRTUAL     8
-
-// ------------------------------------------------------------
-// Mode indexes
-// ------------------------------------------------------------
-
-#define BridgeMode              0
-#define EROSFlexMode            1
-
-// ------------------------------------------------------------
-// Dimmer pins
-// ------------------------------------------------------------
-
-#define DIMMER_ZC_PIN           2
-#define DIMMER_GATE_PIN         3
-
-// ------------------------------------------------------------
-// Hitachi mode values
-// ------------------------------------------------------------
-
-#define hitachiOff              0
-#define hitachiValue            1
-#define hitachiPulse            2
-#define hitachiSine             3
-#define hitachiSawTooth         4
-#define hitachiTriangle         5
-#define hitachiRandom           6
 
 // ------------------------------------------------------------
 // Giga Display public functions
@@ -219,14 +167,6 @@ bool Settings_Begin();
 int Settings_GetLastError();
 
 // ------------------------------------------------------------
-// Dedicated system input indexes
-// ------------------------------------------------------------
-
-#define IN_START  0
-#define IN_STOP   1
-#define IN_PAUSE  2
-
-// ------------------------------------------------------------
 // Dedicated system input pins
 // These are used for Start / Stop / Pause only.
 // ------------------------------------------------------------
@@ -242,17 +182,6 @@ const int DigitalInputs[InSize] = {
 };
 
 // ------------------------------------------------------------
-// Assignable input indexes
-// These are used by EROSFlexSettings.OutInIdx[]
-// ------------------------------------------------------------
-
-#define ASSIGN_IN_1  0
-#define ASSIGN_IN_2  1
-#define ASSIGN_IN_3  2
-
-#define AssignableInSize 3
-
-// ------------------------------------------------------------
 // Assignable input pins
 // These are selectable per output.
 // ------------------------------------------------------------
@@ -265,12 +194,6 @@ const int AssignableInputPins[AssignableInSize] = {
   PIN_ASSIGN_IN_1,
   PIN_ASSIGN_IN_2,
   PIN_ASSIGN_IN_3
-};
-
-const char* AssignableInputLabels[AssignableInSize] = {
-  "Input 1",
-  "Input 2",
-  "Input 3"
 };
 
 // ------------------------------------------------------------

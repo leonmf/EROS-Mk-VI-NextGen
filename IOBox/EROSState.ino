@@ -15,60 +15,8 @@
     M4: IO / control / dimmer / real-time logic
 */
 
-// ------------------------------------------------------------
-// Future command packet definitions
-//
-// Some commands are already routed through this structure.
-// Later these will become the M7-to-M4 command messages.
-// ------------------------------------------------------------
 
-enum EROS_CommandType
-{
-  EROS_CMD_NONE = 0,
-
-  EROS_CMD_SET_MODE,
-
-  EROS_CMD_SET_MANUAL_OUTPUT,
-  EROS_CMD_TOGGLE_MANUAL_OUTPUT,
-
-  EROS_CMD_SET_LOCK,
-  EROS_CMD_TOGGLE_LOCK,
-
-  EROS_CMD_SET_HITACHI_MODE,
-  EROS_CMD_SET_HITACHI_SETPOINT,
-  EROS_CMD_SET_HITACHI_MIN_VALUE,
-  EROS_CMD_SET_HITACHI_MAX_VALUE,
-  EROS_CMD_SET_HITACHI_PERIOD,
-  EROS_CMD_SET_HITACHI_PERIOD_PRECISE,
-  EROS_CMD_TOGGLE_HITACHI_PERIOD_PRECISE,
-  EROS_CMD_SET_HITACHI_MIN_RELAY_VALUE,
-
-  EROS_CMD_AUTO_START,
-  EROS_CMD_AUTO_STOP,
-  EROS_CMD_AUTO_PAUSE,
-
-  EROS_CMD_SET_AUTO_RUN_DURATION_MINUTES,
-  EROS_CMD_SET_AUTO_PAUSE_DURATION_SECONDS,
-  EROS_CMD_SET_AUTO_PENALTY_DURATION_SECONDS,
-  EROS_CMD_SET_AUTO_IO_ON_TIME_MS,
-  EROS_CMD_SET_AUTO_IO_OFF_TIME_MS,
-  EROS_CMD_SET_AUTO_OUTPUT_MODE,
-  EROS_CMD_SET_AUTO_OUTPUT_INPUT_INDEX,
-
-  EROS_CMD_REQUEST_SETTINGS_SAVE,
-  EROS_CMD_REQUEST_SETTINGS_LOAD
-};
-
-struct EROS_Command
-{
-  EROS_CommandType type;
-
-  int index;
-  long value;
-
-  bool boolValue;
-  bool onSettings;
-};
+#include "EROSShared.h"
 
 // ------------------------------------------------------------
 // Command queue
@@ -85,61 +33,6 @@ static int g_commandQueueHead = 0;
 static int g_commandQueueTail = 0;
 static int g_commandQueueCount = 0;
 static bool g_processingCommands = false;
-
-// ------------------------------------------------------------
-// Control status snapshot
-//
-// For now this is refreshed from the existing globals.
-// Later this can become the M4-to-M7 status message.
-// ------------------------------------------------------------
-
-struct EROS_ControlStatus
-{
-  bool input[InSize];
-  bool assignableInput[AssignableInSize];
-  bool output[OutSize];
-
-  bool manualOutputRequest[OutSize];
-
-  byte mode;
-
-  bool autoRunning;
-  bool autoPaused;
-
-  unsigned int autoRemainingTime;
-  unsigned int autoCurrentTime;
-  unsigned int autoRunDuration;
-  unsigned int autoPauseDuration;
-  unsigned int autoPenaltyDuration;
-
-  unsigned int autoIoOnTimeMs;
-  unsigned int autoIoOffTimeMs;
-
-  byte autoOutputMode[OutSize];
-  int autoOutputInputIndex[OutSize];
-
-  int hitachiCurrentOutput;
-
-  int hitachiModeOn;
-  int hitachiModeOff;
-
-  int hitachiSetPointOn;
-  int hitachiSetPointOff;
-
-  int hitachiMaxValueOn;
-  int hitachiMaxValueOff;
-
-  int hitachiMinValueOn;
-  int hitachiMinValueOff;
-
-  int hitachiPeriodOn;
-  int hitachiPeriodOff;
-
-  bool hitachiPeriodPreciseOn;
-  bool hitachiPeriodPreciseOff;
-
-  int hitachiMinRelayValue;
-};
 
 static EROS_ControlStatus g_controlStatus;
 
