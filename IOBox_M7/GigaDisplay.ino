@@ -70,7 +70,7 @@ static lv_obj_t * g_idleStatusLabel = NULL;
 // ------------------------------------------------------------
 // Status / debug screen widgets
 // ------------------------------------------------------------
-#define STATUS_DEBUG_ROW_COUNT 17
+#define STATUS_DEBUG_ROW_COUNT 22
 
 static lv_obj_t * g_statusDebugValueLabels[STATUS_DEBUG_ROW_COUNT];
 
@@ -123,6 +123,7 @@ static lv_obj_t * g_autoOutputInputLabels[OutSize];
 static byte g_autoOutputModeUiValue[OutSize];
 static int g_autoOutputInputUiIndex[OutSize];
 static bool g_autoSettingsUiRefreshing = false;
+static int g_autoSettingsPage = 0;
 
 // ------------------------------------------------------------
 // Hitachi screen widgets
@@ -152,6 +153,37 @@ static lv_obj_t * g_hitachiRelayMinValueLabel = NULL;
 // ------------------------------------------------------------
 
 static bool g_displayInitialized = false;
+
+// ------------------------------------------------------------
+// Screen lifecycle guards
+// ------------------------------------------------------------
+
+enum EROSScreenId {
+  SCREEN_NONE,
+  SCREEN_IDLE,
+  SCREEN_MANUAL,
+  SCREEN_AUTO,
+  SCREEN_AUTO_SETTINGS,
+  SCREEN_HITACHI,
+  SCREEN_HITACHI_RELAY_MIN,
+  SCREEN_STATUS
+};
+
+static EROSScreenId g_currentScreen = SCREEN_NONE;
+static EROSScreenId g_buildingScreen = SCREEN_NONE;
+static bool g_screenBuilding = false;
+static bool g_screenRefreshLocked = false;
+static unsigned long g_screenRefreshLockUntilMs = 0;
+
+enum EROSDeferredNavAction {
+  NAV_ACTION_NONE,
+  NAV_ACTION_AUTO_SETTINGS_BACK,
+  NAV_ACTION_AUTO_SETTINGS_TIMING,
+  NAV_ACTION_AUTO_SETTINGS_OUTPUTS
+};
+
+static EROSDeferredNavAction g_pendingNavAction = NAV_ACTION_NONE;
+static unsigned long g_pendingNavActionSetMs = 0;
 
 static bool g_manualScreenBuilt = false;
 static bool g_autoScreenBuilt = false;
@@ -303,6 +335,16 @@ static void GigaDisplay_UpdateAutoOutputInputLabel(int outputIndex, int inputInd
 static void GigaDisplay_UpdateIdleSettingsResult();
 static void GigaDisplay_UpdateIdleTransportHealth();
 static void GigaDisplay_UpdateStatusScreen();
+
+static void BeginBuildScreen(EROSScreenId screen);
+static void EndBuildScreen(EROSScreenId screen);
+static void LeaveCurrentScreen();
+static bool CanRefreshScreen(EROSScreenId screen);
+static void HoldScreenRefresh(unsigned long holdMs);
+static void ScreenScroll_Event(lv_event_t * e);
+static void ScheduleDeferredNavigation(EROSDeferredNavAction action);
+static void ProcessDeferredNavigation();
+static void GigaDisplay_ShowAutoScreenDeferredSafe();
 static lv_obj_t * GigaDisplay_CreateStatusDebugRow(int row, const char * labelText);
 
 static void ManualButton_Event(lv_event_t * e);
@@ -337,6 +379,8 @@ static void AutoBackButton_Event(lv_event_t * e);
 
 static void AutoSettingsButton_Event(lv_event_t * e);
 static void AutoSettingsBackButton_Event(lv_event_t * e);
+static void AutoSettingsTimingPageButton_Event(lv_event_t * e);
+static void AutoSettingsOutputsPageButton_Event(lv_event_t * e);
 static void AutoSettingsSlider_Event(lv_event_t * e);
 static void AutoOutputModeButton_Event(lv_event_t * e);
 static void AutoOutputInputButton_Event(lv_event_t * e);
@@ -586,6 +630,8 @@ static lv_obj_t * CreateScreen(bool scrollable)
 
   if (scrollable) {
     lv_obj_set_scroll_dir(screen, LV_DIR_VER);
+    lv_obj_add_event_cb(screen, ScreenScroll_Event, LV_EVENT_SCROLL_BEGIN, NULL);
+    lv_obj_add_event_cb(screen, ScreenScroll_Event, LV_EVENT_SCROLL_END, NULL);
   }
   else {
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
@@ -682,6 +728,10 @@ static void SetIdleStatusError(const char * prefix)
 
 static void GigaDisplay_UpdateIdleSettingsResult()
 {
+  if (!CanRefreshScreen(SCREEN_IDLE)) {
+    return;
+  }
+
   unsigned long resultCounter = State_GetSettingsResultCounter();
 
   if (resultCounter == g_lastDisplayedSettingsResultCounter)
@@ -716,6 +766,10 @@ static void GigaDisplay_UpdateIdleSettingsResult()
 
 static void GigaDisplay_UpdateIdleTransportHealth()
 {
+  if (!CanRefreshScreen(SCREEN_IDLE)) {
+    return;
+  }
+
   unsigned long failCounter = State_GetTransportCommandSendFailedCounter();
 
   if (failCounter == g_lastDisplayedTransportCommandFailCounter)
@@ -725,6 +779,135 @@ static void GigaDisplay_UpdateIdleTransportHealth()
 
   g_lastDisplayedTransportCommandFailCounter = failCounter;
   SetIdleStatusText("Command send failed");
+}
+
+// ------------------------------------------------------------
+// Screen lifecycle guard helpers
+// ------------------------------------------------------------
+
+static void BeginBuildScreen(EROSScreenId screen)
+{
+  g_screenBuilding = true;
+  g_buildingScreen = screen;
+  g_currentScreen = SCREEN_NONE;
+  g_screenRefreshLocked = true;
+  g_screenRefreshLockUntilMs = millis() + 100UL;
+}
+
+static void EndBuildScreen(EROSScreenId screen)
+{
+  g_currentScreen = screen;
+  g_buildingScreen = SCREEN_NONE;
+  g_screenBuilding = false;
+  g_screenRefreshLocked = false;
+  g_screenRefreshLockUntilMs = 0;
+}
+
+static void LeaveCurrentScreen()
+{
+  g_currentScreen = SCREEN_NONE;
+  g_buildingScreen = SCREEN_NONE;
+  g_screenBuilding = false;
+  g_screenRefreshLocked = true;
+  g_screenRefreshLockUntilMs = millis() + 100UL;
+}
+
+static void HoldScreenRefresh(unsigned long holdMs)
+{
+  g_screenRefreshLocked = true;
+  g_screenRefreshLockUntilMs = millis() + holdMs;
+}
+
+static bool CanRefreshScreen(EROSScreenId screen)
+{
+  if (g_screenBuilding) {
+    return false;
+  }
+
+  if (g_currentScreen != screen) {
+    return false;
+  }
+
+  if (g_screenRefreshLocked) {
+    if (millis() < g_screenRefreshLockUntilMs) {
+      return false;
+    }
+
+    g_screenRefreshLocked = false;
+    g_screenRefreshLockUntilMs = 0;
+  }
+
+  return true;
+}
+
+static void ScreenScroll_Event(lv_event_t * e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+
+  if (code == LV_EVENT_SCROLL_BEGIN) {
+    g_screenRefreshLocked = true;
+    g_screenRefreshLockUntilMs = millis() + 250UL;
+  }
+  else if (code == LV_EVENT_SCROLL_END) {
+    HoldScreenRefresh(150UL);
+  }
+}
+
+static void ScheduleDeferredNavigation(EROSDeferredNavAction action)
+{
+  if (action == NAV_ACTION_NONE) {
+    return;
+  }
+
+  g_pendingNavAction = action;
+  g_pendingNavActionSetMs = millis();
+
+  // Stop widget refresh immediately. The actual screen change is handled after
+  // lv_timer_handler() returns, so we do not delete/load screens from inside
+  // the LVGL event callback that came from the current screen.
+  HoldScreenRefresh(200UL);
+}
+
+static void ProcessDeferredNavigation()
+{
+  if (g_pendingNavAction == NAV_ACTION_NONE) {
+    return;
+  }
+
+  // Give LVGL/touch handling time to fully finish the button event before
+  // changing screens. A short one-tick delay was not enough for the
+  // intermittent SOS seen when leaving Auto Settings.
+  if (millis() - g_pendingNavActionSetMs < 250UL) {
+    return;
+  }
+
+  EROSDeferredNavAction action = g_pendingNavAction;
+  g_pendingNavAction = NAV_ACTION_NONE;
+
+  if (action == NAV_ACTION_AUTO_SETTINGS_BACK) {
+    // Do not delete the Auto Settings screen while navigating away.
+    // Also avoid the normal ShowAutoScreen path, which updates Auto widgets
+    // before loading the screen. This deferred-safe path loads the existing
+    // Auto screen first, then lets the normal display task refresh it later.
+    GigaDisplay_ShowAutoScreenDeferredSafe();
+    HoldScreenRefresh(250UL);
+  }
+  else if (action == NAV_ACTION_AUTO_SETTINGS_TIMING) {
+    if (g_autoSettingsPage != 0) {
+      g_autoSettingsPage = 0;
+      LeaveCurrentScreen();
+      GigaDisplay_DestroyAutoSettingsScreen();
+      GigaDisplay_ShowAutoSettingsScreen();
+    }
+  }
+  else if (action == NAV_ACTION_AUTO_SETTINGS_OUTPUTS) {
+    if (g_autoSettingsPage != 1) {
+      g_autoSettingsPage = 1;
+      LeaveCurrentScreen();
+      GigaDisplay_DestroyAutoSettingsScreen();
+      GigaDisplay_ShowAutoSettingsScreen();
+    }
+  }
 }
 
 // ------------------------------------------------------------
@@ -750,6 +933,10 @@ void GigaDisplay_Setup()
   g_displayInitialized = true;
 
   Serial.println("DISPLAY 4: Load idle screen");
+  g_currentScreen = SCREEN_IDLE;
+  g_buildingScreen = SCREEN_NONE;
+  g_screenBuilding = false;
+  g_screenRefreshLocked = false;
   lv_scr_load(g_idleScreen);
 
   Serial.println("DISPLAY 5: Display setup complete");
@@ -766,26 +953,23 @@ void GigaDisplay_Task()
   //Serial.println("Initialized");
   lv_timer_handler();
 
+  ProcessDeferredNavigation();
+
   //Serial.println("Timer Handler");
 
-  if (lv_scr_act() == g_idleScreen) {
+  if (lv_scr_act() == g_idleScreen && CanRefreshScreen(SCREEN_IDLE)) {
     GigaDisplay_UpdateIdleSettingsResult();
     GigaDisplay_UpdateIdleTransportHealth();
   }
 
-  if (lv_scr_act() == g_manualScreen) {
-    if (g_manualSkipNextAutoRefresh) {
-      // A manual output callback just queued a command.
-      // Skip this one automatic refresh so the UI does not redraw from the
-      // previous status snapshot before loop() drains the command queue.
-      g_manualSkipNextAutoRefresh = false;
-    }
-    else {
-      GigaDisplay_UpdateManualIndicators();
-    }
+  if (lv_scr_act() == g_manualScreen && CanRefreshScreen(SCREEN_MANUAL)) {
+    // Manual indicators are authoritative M4-reported status only.
+    // Do not preserve optimistic M7-side button states.
+    g_manualSkipNextAutoRefresh = false;
+    GigaDisplay_UpdateManualIndicators();
     //Serial.println("Manual Screen");
   }
-  else if (lv_scr_act() == g_autoScreen) {
+  else if (lv_scr_act() == g_autoScreen && CanRefreshScreen(SCREEN_AUTO)) {
     if (g_autoSkipNextAutoRefresh) {
       // An Auto button callback just queued a command.
       // Skip this one automatic refresh so the UI does not redraw from the
@@ -797,10 +981,10 @@ void GigaDisplay_Task()
     }
     //Serial.println("Auto Screen");
   }
-  else if (lv_scr_act() == g_statusScreen) {
+  else if (lv_scr_act() == g_statusScreen && CanRefreshScreen(SCREEN_STATUS)) {
     GigaDisplay_UpdateStatusScreen();
   }
-  else if (lv_scr_act() == g_hitachiScreen) {
+  else if (lv_scr_act() == g_hitachiScreen && CanRefreshScreen(SCREEN_HITACHI)) {
     if (g_hitachiSkipNextAutoRefresh) {
       // A Hitachi slider callback just queued a command.
       // Skip this one automatic refresh so the UI does not redraw from the
@@ -914,9 +1098,14 @@ void GigaDisplay_ShowIdleScreen()
     return;
   }
 
+  LeaveCurrentScreen();
+  BeginBuildScreen(SCREEN_IDLE);
+
   if (g_idleScreen == NULL) {
     GigaDisplay_CreateIdleScreen();
   }
+
+  EndBuildScreen(SCREEN_IDLE);
   lv_scr_load(g_idleScreen);
 }
 
@@ -926,14 +1115,33 @@ void GigaDisplay_ShowIdleScreen()
 
 static lv_obj_t * GigaDisplay_CreateStatusDebugRow(int row, const char * labelText)
 {
-  const int leftX = 55;
-  const int valueX = 430;
-  const int startY = 50;
-  const int rowH = 20;
-  int y = startY + (row * rowH);
+  // Two-column layout keeps the debug/status values above the bottom buttons.
+  // This avoids overlap now that the status screen includes performance metrics.
+  const int rowsPerColumn = 11;
+  const int startY = 58;
+  const int rowH = 28;
 
-  CreateWhiteLabel(g_statusScreen, labelText, leftX, y);
-  return CreateWhiteLabel(g_statusScreen, "-", valueX, y);
+  int column = row / rowsPerColumn;
+  int rowInColumn = row % rowsPerColumn;
+
+  const int leftLabelX = 30;
+  const int leftValueX = 260;
+  const int rightLabelX = 405;
+  const int rightValueX = 690;
+
+  int labelX = (column == 0) ? leftLabelX : rightLabelX;
+  int valueX = (column == 0) ? leftValueX : rightValueX;
+  int y = startY + (rowInColumn * rowH);
+
+  lv_obj_t * nameLabel = CreateWhiteLabel(g_statusScreen, labelText, labelX, y);
+  lv_label_set_long_mode(nameLabel, LV_LABEL_LONG_CLIP);
+  lv_obj_set_width(nameLabel, (column == 0) ? 220 : 270);
+
+  lv_obj_t * valueLabel = CreateWhiteLabel(g_statusScreen, "-", valueX, y);
+  lv_label_set_long_mode(valueLabel, LV_LABEL_LONG_CLIP);
+  lv_obj_set_width(valueLabel, (column == 0) ? 120 : 90);
+
+  return valueLabel;
 }
 
 static void GigaDisplay_CreateStatusScreen()
@@ -947,20 +1155,25 @@ static void GigaDisplay_CreateStatusScreen()
   g_statusDebugValueLabels[0] = GigaDisplay_CreateStatusDebugRow(0, "Build mode");
   g_statusDebugValueLabels[1] = GigaDisplay_CreateStatusDebugRow(1, "Status packets");
   g_statusDebugValueLabels[2] = GigaDisplay_CreateStatusDebugRow(2, "Status age ms");
-  g_statusDebugValueLabels[3] = GigaDisplay_CreateStatusDebugRow(3, "Status fresh < 1000 ms");
+  g_statusDebugValueLabels[3] = GigaDisplay_CreateStatusDebugRow(3, "Status fresh");
   g_statusDebugValueLabels[4] = GigaDisplay_CreateStatusDebugRow(4, "M4 publish millis");
-  g_statusDebugValueLabels[5] = GigaDisplay_CreateStatusDebugRow(5, "M7 command attempts");
-  g_statusDebugValueLabels[6] = GigaDisplay_CreateStatusDebugRow(6, "M7 command accepted");
-  g_statusDebugValueLabels[7] = GigaDisplay_CreateStatusDebugRow(7, "M7 command failed");
-  g_statusDebugValueLabels[8] = GigaDisplay_CreateStatusDebugRow(8, "M4 queue accepted");
-  g_statusDebugValueLabels[9] = GigaDisplay_CreateStatusDebugRow(9, "M4 queue rejected");
+  g_statusDebugValueLabels[5] = GigaDisplay_CreateStatusDebugRow(5, "M7 cmd attempts");
+  g_statusDebugValueLabels[6] = GigaDisplay_CreateStatusDebugRow(6, "M7 cmd accepted");
+  g_statusDebugValueLabels[7] = GigaDisplay_CreateStatusDebugRow(7, "M7 cmd failed");
+  g_statusDebugValueLabels[8] = GigaDisplay_CreateStatusDebugRow(8, "M4 q accepted");
+  g_statusDebugValueLabels[9] = GigaDisplay_CreateStatusDebugRow(9, "M4 q rejected");
   g_statusDebugValueLabels[10] = GigaDisplay_CreateStatusDebugRow(10, "M4 queue depth");
-  g_statusDebugValueLabels[11] = GigaDisplay_CreateStatusDebugRow(11, "M4 queue capacity");
-  g_statusDebugValueLabels[12] = GigaDisplay_CreateStatusDebugRow(12, "Settings result count");
-  g_statusDebugValueLabels[13] = GigaDisplay_CreateStatusDebugRow(13, "Loopback sent count");
-  g_statusDebugValueLabels[14] = GigaDisplay_CreateStatusDebugRow(14, "Loopback M4 request id");
-  g_statusDebugValueLabels[15] = GigaDisplay_CreateStatusDebugRow(15, "Loopback echo id/count");
-  g_statusDebugValueLabels[16] = GigaDisplay_CreateStatusDebugRow(16, "Loopback ok / age ms");
+  g_statusDebugValueLabels[11] = GigaDisplay_CreateStatusDebugRow(11, "M4 q capacity");
+  g_statusDebugValueLabels[12] = GigaDisplay_CreateStatusDebugRow(12, "Settings results");
+  g_statusDebugValueLabels[13] = GigaDisplay_CreateStatusDebugRow(13, "Loopback sent");
+  g_statusDebugValueLabels[14] = GigaDisplay_CreateStatusDebugRow(14, "Loopback request");
+  g_statusDebugValueLabels[15] = GigaDisplay_CreateStatusDebugRow(15, "Loopback echo/cnt");
+  g_statusDebugValueLabels[16] = GigaDisplay_CreateStatusDebugRow(16, "Loopback ok/age");
+  g_statusDebugValueLabels[17] = GigaDisplay_CreateStatusDebugRow(17, "M4 avg loop ms");
+  g_statusDebugValueLabels[18] = GigaDisplay_CreateStatusDebugRow(18, "M4 avg exec ms");
+  g_statusDebugValueLabels[19] = GigaDisplay_CreateStatusDebugRow(19, "M4 loop count");
+  g_statusDebugValueLabels[20] = GigaDisplay_CreateStatusDebugRow(20, "M7 poll avg ms");
+  g_statusDebugValueLabels[21] = GigaDisplay_CreateStatusDebugRow(21, "M7 poll count");
 
   g_statusScreenBuilt = true;
 }
@@ -972,10 +1185,14 @@ void GigaDisplay_ShowStatusScreen()
     return;
   }
 
+  LeaveCurrentScreen();
+  BeginBuildScreen(SCREEN_STATUS);
+
   if (!g_statusScreenBuilt) {
     GigaDisplay_CreateStatusScreen();
   }
 
+  EndBuildScreen(SCREEN_STATUS);
   GigaDisplay_UpdateStatusScreen();
   lv_scr_load(g_statusScreen);
 }
@@ -993,7 +1210,7 @@ static void GigaDisplay_SetStatusDebugValue(int row, const char * valueText)
 
 static void GigaDisplay_UpdateStatusScreen()
 {
-  if (!g_statusScreenBuilt) {
+  if (!g_statusScreenBuilt || !CanRefreshScreen(SCREEN_STATUS)) {
     return;
   }
 
@@ -1051,6 +1268,27 @@ static void GigaDisplay_UpdateStatusScreen()
            State_GetTransportLoopbackOk() ? "OK" : "WAIT",
            State_GetTransportLoopbackEchoAgeMs());
   GigaDisplay_SetStatusDebugValue(16, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu.%03lu",
+           ((unsigned long)State_GetM4AvgLoopPeriodUs()) / 1000UL,
+           ((unsigned long)State_GetM4AvgLoopPeriodUs()) % 1000UL);
+  GigaDisplay_SetStatusDebugValue(17, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu.%03lu",
+           ((unsigned long)State_GetM4AvgLoopExecUs()) / 1000UL,
+           ((unsigned long)State_GetM4AvgLoopExecUs()) % 1000UL);
+  GigaDisplay_SetStatusDebugValue(18, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetM4LoopCounter());
+  GigaDisplay_SetStatusDebugValue(19, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu.%02lu",
+           ((unsigned long)State_GetM7StatusPollAvgMsX100()) / 100UL,
+           ((unsigned long)State_GetM7StatusPollAvgMsX100()) % 100UL);
+  GigaDisplay_SetStatusDebugValue(20, buffer);
+
+  snprintf(buffer, sizeof(buffer), "%lu", State_GetM7StatusPollCounter());
+  GigaDisplay_SetStatusDebugValue(21, buffer);
 }
 
 // ------------------------------------------------------------
@@ -1146,16 +1384,24 @@ void GigaDisplay_ShowManualScreen()
     return;
   }
 
+  LeaveCurrentScreen();
+  BeginBuildScreen(SCREEN_MANUAL);
+
   if (!g_manualScreenBuilt) {
     GigaDisplay_CreateManualScreen();
   }
 
+  EndBuildScreen(SCREEN_MANUAL);
   GigaDisplay_UpdateManualIndicators();
   lv_scr_load(g_manualScreen);
 }
 
 void GigaDisplay_UpdateManualIndicators()
 {
+  if (!g_manualScreenBuilt || !CanRefreshScreen(SCREEN_MANUAL)) {
+    return;
+  }
+
   for (int i = 0; i < InSize; i++) {
     bool state = State_GetInput(i);
     SetIndicatorState(g_inputIndicators[i], state);
@@ -1295,17 +1541,43 @@ void GigaDisplay_ShowAutoScreen()
     return;
   }
 
+  LeaveCurrentScreen();
+  BeginBuildScreen(SCREEN_AUTO);
+
   if (!g_autoScreenBuilt) {
     GigaDisplay_CreateAutoScreen();
   }
 
+  EndBuildScreen(SCREEN_AUTO);
   GigaDisplay_UpdateAutoScreen();
   lv_scr_load(g_autoScreen);
 }
 
+static void GigaDisplay_ShowAutoScreenDeferredSafe()
+{
+  if (!g_displayInitialized) {
+    return;
+  }
+
+  LeaveCurrentScreen();
+  BeginBuildScreen(SCREEN_AUTO);
+
+  if (!g_autoScreenBuilt) {
+    GigaDisplay_CreateAutoScreen();
+  }
+
+  // Load the screen first. Do not update widgets in this transition path;
+  // the regular GigaDisplay_Task refresh will update the Auto screen after
+  // the transition guard/refresh hold expires.
+  lv_scr_load(g_autoScreen);
+
+  EndBuildScreen(SCREEN_AUTO);
+  HoldScreenRefresh(250UL);
+}
+
 static void GigaDisplay_UpdateAutoScreen()
 {
-  if (!g_autoScreenBuilt) {
+  if (!g_autoScreenBuilt || !CanRefreshScreen(SCREEN_AUTO)) {
     return;
   }
 
@@ -1403,50 +1675,59 @@ static void CreateAutoSettingsSlider(
 
 static void GigaDisplay_CreateAutoSettingsScreen()
 {
-  g_autoSettingsScreen = CreateScreen(true);
+  // Fixed pages instead of scrollable Auto Settings.
+  g_autoSettingsScreen = CreateScreen(false);
 
-  CreateScreenTitle(g_autoSettingsScreen, "Auto Settings");
+  if (g_autoSettingsPage < 0 || g_autoSettingsPage > 1) {
+    g_autoSettingsPage = 0;
+  }
+
+  CreateScreenTitle(g_autoSettingsScreen, g_autoSettingsPage == 0 ? "Auto Settings: Timing" : "Auto Settings: Outputs");
 
   CreateButton(g_autoSettingsScreen, "Back", 650, 20, 120, 45, AutoSettingsBackButton_Event, NULL);
+  CreateButton(g_autoSettingsScreen, "Timing", 35, 55, 140, 42, AutoSettingsTimingPageButton_Event, NULL);
+  CreateButton(g_autoSettingsScreen, "Outputs", 190, 55, 140, 42, AutoSettingsOutputsPageButton_Event, NULL);
 
-  CreateAutoSettingsSlider(g_autoSettingsScreen, "Run Duration", 85, 1, 300,
-                           &g_autoRunDurationSlider, &g_autoRunDurationValueLabel);
+  if (g_autoSettingsPage == 0) {
+    CreateAutoSettingsSlider(g_autoSettingsScreen, "Run Duration", 130, 1, 300,
+                             &g_autoRunDurationSlider, &g_autoRunDurationValueLabel);
 
-  CreateAutoSettingsSlider(g_autoSettingsScreen, "Pause Duration", 145, 0, 300,
-                           &g_autoPauseDurationSlider, &g_autoPauseDurationValueLabel);
+    CreateAutoSettingsSlider(g_autoSettingsScreen, "Pause Duration", 190, 0, 300,
+                             &g_autoPauseDurationSlider, &g_autoPauseDurationValueLabel);
 
-  CreateAutoSettingsSlider(g_autoSettingsScreen, "Penalty Duration", 205, 0, 300,
-                           &g_autoPenaltyDurationSlider, &g_autoPenaltyDurationValueLabel);
+    CreateAutoSettingsSlider(g_autoSettingsScreen, "Penalty Duration", 250, 0, 300,
+                             &g_autoPenaltyDurationSlider, &g_autoPenaltyDurationValueLabel);
 
-  CreateAutoSettingsSlider(g_autoSettingsScreen, "IO On Time", 265, 0, 100,
-                           &g_autoOnTimeSlider, &g_autoOnTimeValueLabel);
+    CreateAutoSettingsSlider(g_autoSettingsScreen, "IO On Time", 310, 0, 100,
+                             &g_autoOnTimeSlider, &g_autoOnTimeValueLabel);
 
-  CreateAutoSettingsSlider(g_autoSettingsScreen, "IO Off Time", 325, 0, 100,
-                           &g_autoOffTimeSlider, &g_autoOffTimeValueLabel);
+    CreateAutoSettingsSlider(g_autoSettingsScreen, "IO Off Time", 370, 0, 100,
+                             &g_autoOffTimeSlider, &g_autoOffTimeValueLabel);
+  }
+  else {
+    CreateWhiteLabel(g_autoSettingsScreen, "Output Modes", 35, 115);
 
-  CreateWhiteLabel(g_autoSettingsScreen, "Output Modes", 35, 395);
+    int y = 155;
 
-  int y = 440;
-
-  for (int outputIndex = 0; outputIndex < OutSize; outputIndex++) {
-    if (outputIndex == OUT_LOCK_1 || 
-      outputIndex == OUT_LOCK_2 || 
-      outputIndex == OUT_DIMMER_ENABLE) {
+    for (int outputIndex = 0; outputIndex < OutSize; outputIndex++) {
+      if (outputIndex == OUT_LOCK_1 ||
+          outputIndex == OUT_LOCK_2 ||
+          outputIndex == OUT_DIMMER_ENABLE) {
         continue;
       }
 
-    CreateWhiteLabel(g_autoSettingsScreen, OUTPUT_NAMES[outputIndex], 50, y + 12);
+      CreateWhiteLabel(g_autoSettingsScreen, OUTPUT_NAMES[outputIndex], 50, y + 12);
 
-    lv_obj_t * modeBtn = CreateButton(g_autoSettingsScreen, "Off", 250, y, 260, 44, AutoOutputModeButton_Event, (void *)(uintptr_t)outputIndex);
-    g_autoOutputModeLabels[outputIndex] = GetButtonLabel(modeBtn);
-    g_autoOutputModeUiValue[outputIndex] = 0;
+      lv_obj_t * modeBtn = CreateButton(g_autoSettingsScreen, "Off", 250, y, 260, 44, AutoOutputModeButton_Event, (void *)(uintptr_t)outputIndex);
+      g_autoOutputModeLabels[outputIndex] = GetButtonLabel(modeBtn);
+      g_autoOutputModeUiValue[outputIndex] = 0;
 
-    lv_obj_t * inputBtn = CreateButton(g_autoSettingsScreen, "Input 1", 530, y, 140, 44, AutoOutputInputButton_Event, (void *)(uintptr_t)outputIndex);
-    g_autoOutputInputLabels[outputIndex] = GetButtonLabel(inputBtn);
-    g_autoOutputInputUiIndex[outputIndex] = 0;
+      lv_obj_t * inputBtn = CreateButton(g_autoSettingsScreen, "Input 1", 530, y, 140, 44, AutoOutputInputButton_Event, (void *)(uintptr_t)outputIndex);
+      g_autoOutputInputLabels[outputIndex] = GetButtonLabel(inputBtn);
+      g_autoOutputInputUiIndex[outputIndex] = 0;
 
-    y += 58;
-
+      y += 52;
+    }
   }
 
   g_autoSettingsScreenBuilt = true;
@@ -1459,17 +1740,21 @@ void GigaDisplay_ShowAutoSettingsScreen()
     return;
   }
 
+  LeaveCurrentScreen();
+  BeginBuildScreen(SCREEN_AUTO_SETTINGS);
+
   if (!g_autoSettingsScreenBuilt) {
     GigaDisplay_CreateAutoSettingsScreen();
   }
 
+  EndBuildScreen(SCREEN_AUTO_SETTINGS);
   GigaDisplay_UpdateAutoSettingsScreen();
   lv_scr_load(g_autoSettingsScreen);
 }
 
 static void GigaDisplay_UpdateAutoSettingsScreen()
 {
-  if (!g_autoSettingsScreenBuilt) {
+  if (!g_autoSettingsScreenBuilt || !CanRefreshScreen(SCREEN_AUTO_SETTINGS)) {
     return;
   }
 
@@ -1483,41 +1768,65 @@ static void GigaDisplay_UpdateAutoSettingsScreen()
   unsigned int onMs = State_GetAutoIoOnTimeMs();
   unsigned int offMs = State_GetAutoIoOffTimeMs();
 
-  lv_slider_set_value(g_autoRunDurationSlider, runMinutes, LV_ANIM_OFF);
-  lv_slider_set_value(g_autoPauseDurationSlider, pauseSeconds, LV_ANIM_OFF);
-  lv_slider_set_value(g_autoPenaltyDurationSlider, penaltySeconds, LV_ANIM_OFF);
-  lv_slider_set_value(g_autoOnTimeSlider, AutoSettings_MsValueToSlider(onMs), LV_ANIM_OFF);
-  lv_slider_set_value(g_autoOffTimeSlider, AutoSettings_MsValueToSlider(offMs), LV_ANIM_OFF);
-
-  snprintf(buffer, sizeof(buffer), "%u min", runMinutes);
-  lv_label_set_text(g_autoRunDurationValueLabel, buffer);
-
-  snprintf(buffer, sizeof(buffer), "%u s", pauseSeconds);
-  lv_label_set_text(g_autoPauseDurationValueLabel, buffer);
-
-  snprintf(buffer, sizeof(buffer), "%u s", penaltySeconds);
-  lv_label_set_text(g_autoPenaltyDurationValueLabel, buffer);
-
-  AutoSettings_FormatMs(buffer, sizeof(buffer), onMs);
-  lv_label_set_text(g_autoOnTimeValueLabel, buffer);
-
-  AutoSettings_FormatMs(buffer, sizeof(buffer), offMs);
-  lv_label_set_text(g_autoOffTimeValueLabel, buffer);
-
-  for (int outputIndex = 0; outputIndex < OutSize; outputIndex++) {
-    if (outputIndex == OUT_LOCK_1 || 
-      outputIndex == OUT_LOCK_2 || 
-      outputIndex == OUT_DIMMER_ENABLE) {
-      continue;
+  if (g_autoSettingsPage == 0) {
+    if (g_autoRunDurationSlider != NULL) {
+      lv_slider_set_value(g_autoRunDurationSlider, runMinutes, LV_ANIM_OFF);
+    }
+    if (g_autoPauseDurationSlider != NULL) {
+      lv_slider_set_value(g_autoPauseDurationSlider, pauseSeconds, LV_ANIM_OFF);
+    }
+    if (g_autoPenaltyDurationSlider != NULL) {
+      lv_slider_set_value(g_autoPenaltyDurationSlider, penaltySeconds, LV_ANIM_OFF);
+    }
+    if (g_autoOnTimeSlider != NULL) {
+      lv_slider_set_value(g_autoOnTimeSlider, AutoSettings_MsValueToSlider(onMs), LV_ANIM_OFF);
+    }
+    if (g_autoOffTimeSlider != NULL) {
+      lv_slider_set_value(g_autoOffTimeSlider, AutoSettings_MsValueToSlider(offMs), LV_ANIM_OFF);
     }
 
-    byte mode = State_GetAutoOutputMode(outputIndex);
-    mode = constrain(mode, 0, AUTO_OUT_MODE_COUNT - 1);
-    GigaDisplay_UpdateAutoOutputModeLabel(outputIndex, mode);
+    snprintf(buffer, sizeof(buffer), "%u min", runMinutes);
+    if (g_autoRunDurationValueLabel != NULL) {
+      lv_label_set_text(g_autoRunDurationValueLabel, buffer);
+    }
 
-    int inputIndex = State_GetAutoOutputInputIndex(outputIndex);
-    inputIndex = constrain(inputIndex, 0, AssignableInSize - 1);
-    GigaDisplay_UpdateAutoOutputInputLabel(outputIndex, inputIndex);
+    snprintf(buffer, sizeof(buffer), "%u s", pauseSeconds);
+    if (g_autoPauseDurationValueLabel != NULL) {
+      lv_label_set_text(g_autoPauseDurationValueLabel, buffer);
+    }
+
+    snprintf(buffer, sizeof(buffer), "%u s", penaltySeconds);
+    if (g_autoPenaltyDurationValueLabel != NULL) {
+      lv_label_set_text(g_autoPenaltyDurationValueLabel, buffer);
+    }
+
+    AutoSettings_FormatMs(buffer, sizeof(buffer), onMs);
+    if (g_autoOnTimeValueLabel != NULL) {
+      lv_label_set_text(g_autoOnTimeValueLabel, buffer);
+    }
+
+    AutoSettings_FormatMs(buffer, sizeof(buffer), offMs);
+    if (g_autoOffTimeValueLabel != NULL) {
+      lv_label_set_text(g_autoOffTimeValueLabel, buffer);
+    }
+  }
+
+  if (g_autoSettingsPage == 1) {
+    for (int outputIndex = 0; outputIndex < OutSize; outputIndex++) {
+      if (outputIndex == OUT_LOCK_1 ||
+          outputIndex == OUT_LOCK_2 ||
+          outputIndex == OUT_DIMMER_ENABLE) {
+        continue;
+      }
+
+      byte mode = State_GetAutoOutputMode(outputIndex);
+      mode = constrain(mode, 0, AUTO_OUT_MODE_COUNT - 1);
+      GigaDisplay_UpdateAutoOutputModeLabel(outputIndex, mode);
+
+      int inputIndex = State_GetAutoOutputInputIndex(outputIndex);
+      inputIndex = constrain(inputIndex, 0, AssignableInSize - 1);
+      GigaDisplay_UpdateAutoOutputInputLabel(outputIndex, inputIndex);
+    }
   }
 
   g_autoSettingsUiRefreshing = false;
@@ -1527,6 +1836,14 @@ static void GigaDisplay_UpdateAutoSettingsSliderLabelsFromWidgets()
 {
   char buffer[40];
 
+  if (g_autoRunDurationSlider == NULL ||
+      g_autoPauseDurationSlider == NULL ||
+      g_autoPenaltyDurationSlider == NULL ||
+      g_autoOnTimeSlider == NULL ||
+      g_autoOffTimeSlider == NULL) {
+    return;
+  }
+
   int runMinutes = lv_slider_get_value(g_autoRunDurationSlider);
   int pauseSeconds = lv_slider_get_value(g_autoPauseDurationSlider);
   int penaltySeconds = lv_slider_get_value(g_autoPenaltyDurationSlider);
@@ -1534,19 +1851,29 @@ static void GigaDisplay_UpdateAutoSettingsSliderLabelsFromWidgets()
   int offMs = AutoSettings_MsSliderToValue(lv_slider_get_value(g_autoOffTimeSlider));
 
   snprintf(buffer, sizeof(buffer), "%d min", runMinutes);
-  lv_label_set_text(g_autoRunDurationValueLabel, buffer);
+  if (g_autoRunDurationValueLabel != NULL) {
+    lv_label_set_text(g_autoRunDurationValueLabel, buffer);
+  }
 
   snprintf(buffer, sizeof(buffer), "%d s", pauseSeconds);
-  lv_label_set_text(g_autoPauseDurationValueLabel, buffer);
+  if (g_autoPauseDurationValueLabel != NULL) {
+    lv_label_set_text(g_autoPauseDurationValueLabel, buffer);
+  }
 
   snprintf(buffer, sizeof(buffer), "%d s", penaltySeconds);
-  lv_label_set_text(g_autoPenaltyDurationValueLabel, buffer);
+  if (g_autoPenaltyDurationValueLabel != NULL) {
+    lv_label_set_text(g_autoPenaltyDurationValueLabel, buffer);
+  }
 
   AutoSettings_FormatMs(buffer, sizeof(buffer), onMs);
-  lv_label_set_text(g_autoOnTimeValueLabel, buffer);
+  if (g_autoOnTimeValueLabel != NULL) {
+    lv_label_set_text(g_autoOnTimeValueLabel, buffer);
+  }
 
   AutoSettings_FormatMs(buffer, sizeof(buffer), offMs);
-  lv_label_set_text(g_autoOffTimeValueLabel, buffer);
+  if (g_autoOffTimeValueLabel != NULL) {
+    lv_label_set_text(g_autoOffTimeValueLabel, buffer);
+  }
 }
 
 static void GigaDisplay_UpdateAutoOutputModeLabel(int outputIndex, byte mode)
@@ -1705,17 +2032,21 @@ void GigaDisplay_ShowHitachiScreen()
 
   g_previousScreenBeforeHitachi = lv_scr_act();
 
+  LeaveCurrentScreen();
+  BeginBuildScreen(SCREEN_HITACHI);
+
   if (!g_hitachiScreenBuilt) {
     GigaDisplay_CreateHitachiScreen();
   }
 
+  EndBuildScreen(SCREEN_HITACHI);
   GigaDisplay_UpdateHitachiScreen();
   lv_scr_load(g_hitachiScreen);
 }
 
 static void GigaDisplay_UpdateHitachiScreen()
 {
-  if (!g_hitachiScreenBuilt || g_hitachiUiRefreshing) {
+  if (!g_hitachiScreenBuilt || g_hitachiUiRefreshing || !CanRefreshScreen(SCREEN_HITACHI)) {
     return;
   }
 
@@ -1731,10 +2062,8 @@ static void GigaDisplay_UpdateHitachiScreen()
   lv_slider_set_range(g_hitachiMaxSlider, minRelayValue, 100);
   lv_slider_set_range(g_hitachiMinSlider, minRelayValue, 100);
 
-  Command_SetHitachiSetPoint(g_hitachiEditingOnSettings, setPoint);
-  Command_SetHitachiMaxValue(g_hitachiEditingOnSettings, maxValue);
-  Command_SetHitachiMinValue(g_hitachiEditingOnSettings, minValue);
-
+  // Display refresh is read-only. Do not send Hitachi commands here.
+  // M7 commands, M4 decides, M7 displays M4-reported truth.
   g_hitachiPeriodPreciseMode =
     State_GetHitachiPeriodPrecise(g_hitachiEditingOnSettings);
 
@@ -1851,17 +2180,21 @@ void GigaDisplay_ShowHitachiRelayMinScreen()
 
   g_previousScreenBeforeRelayMin = lv_scr_act();
 
+  LeaveCurrentScreen();
+  BeginBuildScreen(SCREEN_HITACHI_RELAY_MIN);
+
   if (!g_hitachiRelayMinScreenBuilt) {
     GigaDisplay_CreateHitachiRelayMinScreen();
   }
 
+  EndBuildScreen(SCREEN_HITACHI_RELAY_MIN);
   GigaDisplay_UpdateHitachiRelayMinScreen();
   lv_scr_load(g_hitachiRelayMinScreen);
 }
 
 static void GigaDisplay_UpdateHitachiRelayMinScreen()
 {
-  if (!g_hitachiRelayMinScreenBuilt) {
+  if (!g_hitachiRelayMinScreenBuilt || !CanRefreshScreen(SCREEN_HITACHI_RELAY_MIN)) {
     return;
   }
 
@@ -1968,27 +2301,19 @@ static void OutputToggle_Event(lv_event_t * e)
   int outputIdx = MANUAL_BUTTON_OUTPUT_INDEX[buttonIdx];
 
   if (outputIdx == OUT_LOCK_1) {
-    bool newState = !(State_GetOutput(OUT_LOCK_1) || State_GetOutput(OUT_LOCK_2));
     Command_ToggleLock();
-    SetIndicatorState(g_outputIndicators[OUT_LOCK_1], newState);
-    SetValueLabel(g_outputValueLabels[OUT_LOCK_1], newState);
-    SetIndicatorState(g_outputIndicators[OUT_LOCK_2], newState);
-    SetValueLabel(g_outputValueLabels[OUT_LOCK_2], newState);
   }
   else if (outputIdx == OUT_HITACHI_VIRTUAL) {
     Command_ToggleHitachiVirtualRequest();
   }
   else {
-    bool newState = !State_GetOutput(outputIdx);
     Command_ToggleManualOutput(outputIdx);
-
-    if (outputIdx >= 0 && outputIdx < PhysicalOutSize) {
-      SetIndicatorState(g_outputIndicators[outputIdx], newState);
-      SetValueLabel(g_outputValueLabels[outputIdx], newState);
-    }
   }
 
-  g_manualSkipNextAutoRefresh = true;
+  // Do not optimistically change indicators here.
+  // The displayed state should come only from the next M4 status mask poll,
+  // because M4 owns physical inputs, automatic modes, and actual output state.
+  g_manualSkipNextAutoRefresh = false;
 }
 
 static void AutoSettingsButton_Event(lv_event_t * e)
@@ -1998,8 +2323,25 @@ static void AutoSettingsButton_Event(lv_event_t * e)
 
 static void AutoSettingsBackButton_Event(lv_event_t * e)
 {
-  GigaDisplay_ShowAutoScreen();
-  GigaDisplay_DestroyAutoSettingsScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_AUTO_SETTINGS_BACK);
+}
+
+static void AutoSettingsTimingPageButton_Event(lv_event_t * e)
+{
+  if (g_autoSettingsPage == 0) {
+    return;
+  }
+
+  ScheduleDeferredNavigation(NAV_ACTION_AUTO_SETTINGS_TIMING);
+}
+
+static void AutoSettingsOutputsPageButton_Event(lv_event_t * e)
+{
+  if (g_autoSettingsPage == 1) {
+    return;
+  }
+
+  ScheduleDeferredNavigation(NAV_ACTION_AUTO_SETTINGS_OUTPUTS);
 }
 
 static void AutoSettingsSlider_Event(lv_event_t * e)
@@ -2080,8 +2422,14 @@ static void HitachiBackButton_Event(lv_event_t * e)
 {
   lv_obj_t * previousScreen = g_previousScreenBeforeHitachi;
 
-  if (previousScreen != NULL) {
-    lv_scr_load(previousScreen);
+  if (previousScreen == g_manualScreen) {
+    GigaDisplay_ShowManualScreen();
+  }
+  else if (previousScreen == g_autoScreen) {
+    GigaDisplay_ShowAutoScreen();
+  }
+  else if (previousScreen == g_statusScreen) {
+    GigaDisplay_ShowStatusScreen();
   }
   else {
     GigaDisplay_ShowIdleScreen();
@@ -2113,10 +2461,7 @@ static void HitachiModeButton_Event(lv_event_t * e)
   int mode = HITACHI_MODE_VALUES[modeIdx];
   Command_SetHitachiMode(g_hitachiEditingOnSettings, mode);
 
-  char buffer[32];
-  snprintf(buffer, sizeof(buffer), "Mode: %s", Hitachi_GetModeName(mode));
-  lv_label_set_text(g_hitachiModeLabel, buffer);
-
+  // Do not optimistically redraw the mode label. It will update from M4 status.
   g_hitachiSkipNextAutoRefresh = true;
 }
 
@@ -2162,15 +2507,10 @@ static void HitachiSlider_Event(lv_event_t * e)
 
 static void HitachiPeriodModeButton_Event(lv_event_t * e)
 {
-  g_hitachiPeriodPreciseMode = !g_hitachiPeriodPreciseMode;
-  Command_SetHitachiPeriodPrecise(g_hitachiEditingOnSettings, g_hitachiPeriodPreciseMode);
+  bool requestedPrecise = !State_GetHitachiPeriodPrecise(g_hitachiEditingOnSettings);
+  Command_SetHitachiPeriodPrecise(g_hitachiEditingOnSettings, requestedPrecise);
 
-  lv_label_set_text(
-    g_hitachiPeriodModeLabel,
-    g_hitachiPeriodPreciseMode ? "Period: Precise" : "Period: Coarse"
-  );
-
-  GigaDisplay_UpdateHitachiSliderLabelsFromWidgets();
+  // Do not optimistically redraw the label. It will update from M4 status.
   g_hitachiSkipNextAutoRefresh = true;
 }
 
@@ -2209,8 +2549,12 @@ static void HitachiRelayMinPlus5Button_Event(lv_event_t * e)
 
 static void HitachiRelayMinBackButton_Event(lv_event_t * e)
 {
-  if (g_previousScreenBeforeRelayMin != NULL) {
-    lv_scr_load(g_previousScreenBeforeRelayMin);
+  if (g_hitachiScreenBuilt && g_hitachiScreen != NULL) {
+    LeaveCurrentScreen();
+    BeginBuildScreen(SCREEN_HITACHI);
+    EndBuildScreen(SCREEN_HITACHI);
+    GigaDisplay_UpdateHitachiScreen();
+    lv_scr_load(g_hitachiScreen);
   }
   else {
     GigaDisplay_ShowHitachiScreen();
@@ -2219,14 +2563,16 @@ static void HitachiRelayMinBackButton_Event(lv_event_t * e)
 
 static void SaveSettingsButton_Event(lv_event_t * e)
 {
+  SetIdleStatusText("Saving settings...");
   Command_RequestSettingsSave();
-  SetIdleStatusText("Save requested");
+  GigaDisplay_UpdateIdleSettingsResult();
 }
 
 static void LoadSettingsButton_Event(lv_event_t * e)
 {
+  SetIdleStatusText("Loading settings...");
   Command_RequestSettingsLoad();
-  SetIdleStatusText("Load requested");
+  GigaDisplay_UpdateIdleSettingsResult();
 }
 
 // ------------------------------------------------------------

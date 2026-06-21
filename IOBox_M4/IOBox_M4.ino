@@ -1,26 +1,193 @@
 /*
-  IOBox_M4.ino
+ * IOBox_M4.ino
+ *
+ * EROS MK VI (NextGen) M4 control-core build
+ * Copyright 2026
+ *
+ * Pin 0  = Bridge
+ * Pin 1  = Bridge
+ * Pin 2  = Dimmer Zero Cross
+ * Pin 3  = Dimmer Output
+ * Pin 4  = Unused
+ * Pin 5  = Start Button
+ * Pin 6  = Stop Button
+ * Pin 7  = Pause Button
+ * Pin 8  = Assignable Input 1
+ * Pin 9  = Assignable Input 2
+ * Pin 10 = Assignable Input 3
+ *
+ * Pin 39 = Dry Contact Out 4
+ * Pin 41 = Dry Contact Out 3
+ * Pin 43 = Dry Contact Out 2
+ * Pin 45 = Dry Contact Out 1
+ * Pin 47 = Lock 2
+ * Pin 49 = Lock 1
+ * Pin 51 = AC Output
+ * Pin 53 = Dimmer Relay
+ */
 
-  EROS Mk VI M4-side sketch.
-
-  Owns:
-    - Physical IO
-    - Control logic
-    - Hitachi dimmer timing/control
-    - Settings storage
-    - M4-side command execution
-    - Future M4 transport endpoint
-*/
+// ------------------------------------------------------------
+// Core includes
+// ------------------------------------------------------------
 
 #include "EROSShared.h"
-
-#include <mbed.h>
 #include <string.h>
+#include "RPC.h"
+#include "SerialRPC.h"
+
+#if EROS_BUILD_HAS_M7_SIDE
+#include "Arduino_H7_Video.h"
+#include "Arduino_GigaDisplayTouch.h"
+#include "lvgl.h"
+#endif
+
+// ------------------------------------------------------------
+// Giga Display public functions - M7 side
+// ------------------------------------------------------------
+
+#if EROS_BUILD_HAS_M7_SIDE
+void GigaDisplay_Setup();
+void GigaDisplay_Task();
+void GigaDisplay_ShowIdleScreen();
+void GigaDisplay_ShowManualScreen();
+void GigaDisplay_UpdateManualIndicators();
+void GigaDisplay_ShowHitachiScreen();
+#endif
+
+// ------------------------------------------------------------
+// M7-facing EROS State / Command interface prototypes
+// ------------------------------------------------------------
+
+#if EROS_BUILD_HAS_M7_SIDE
+
+// Input / output state
+bool State_GetInput(int inputIndex);
+bool State_GetAssignableInput(int inputIndex);
+bool State_GetAssignedInputForOutput(int outputIndex);
+bool State_GetOutput(int outputIndex);
+bool State_GetManualOutputRequest(int outputIndex);
+
+// Manual output commands
+void Command_SetManualOutput(int outputIndex, bool state);
+void Command_ToggleManualOutput(int outputIndex);
+void Command_SetLock(bool state);
+void Command_ToggleLock();
+
+// Dimmer relay compatibility commands
+bool State_GetDimmerEnabledRequest();
+void Command_SetDimmerEnabledRequest(bool enabled);
+void Command_ToggleDimmerEnabledRequest();
+
+// Mode state / commands
+void Command_SetMode(byte mode);
+byte State_GetMode();
+
+// Settings state / commands
+int State_GetSettingsLastError();
+byte State_GetSettingsLastAction();
+bool State_GetSettingsLastOk();
+unsigned long State_GetSettingsResultCounter();
+void Command_RequestSettingsSave();
+void Command_RequestSettingsLoad();
+
+// Transport health
+unsigned long State_GetTransportStatusCounter();
+unsigned long State_GetTransportStatusAgeMs();
+unsigned long State_GetTransportStatusPublishMillis();
+unsigned long State_GetTransportCommandAcceptedCounter();
+unsigned long State_GetTransportCommandRejectedCounter();
+byte State_GetTransportCommandQueueDepth();
+byte State_GetTransportCommandQueueCapacity();
+unsigned long State_GetTransportCommandSendAttemptCounter();
+unsigned long State_GetTransportCommandSendAcceptedCounter();
+unsigned long State_GetTransportCommandSendFailedCounter();
+bool State_IsTransportStatusFresh(unsigned long maxAgeMs);
+void Command_RequestTransportLoopbackPing();
+unsigned long State_GetTransportLoopbackRequestCounter();
+unsigned long State_GetTransportLoopbackRequestId();
+unsigned long State_GetTransportLoopbackEchoId();
+unsigned long State_GetTransportLoopbackEchoCounter();
+unsigned long State_GetTransportLoopbackEchoAgeMs();
+bool State_GetTransportLoopbackOk();
+
+// M7 status snapshot receive point
+void State_ApplyControlStatus(const EROS_ControlStatus & status);
+
+// Hitachi state / commands
+int State_GetHitachiMode(bool onSettings);
+void Command_SetHitachiMode(bool onSettings, int mode);
+
+int State_GetHitachiSetPoint(bool onSettings);
+void Command_SetHitachiSetPoint(bool onSettings, int value);
+
+int State_GetHitachiMaxValue(bool onSettings);
+void Command_SetHitachiMaxValue(bool onSettings, int value);
+
+int State_GetHitachiMinValue(bool onSettings);
+void Command_SetHitachiMinValue(bool onSettings, int value);
+
+int State_GetHitachiPeriod(bool onSettings);
+void Command_SetHitachiPeriod(bool onSettings, int periodMs);
+
+bool State_GetHitachiPeriodPrecise(bool onSettings);
+void Command_SetHitachiPeriodPrecise(bool onSettings, bool precise);
+void Command_ToggleHitachiPeriodPrecise(bool onSettings);
+
+int State_GetHitachiCurrentOutput();
+
+int State_GetHitachiMinRelayValue();
+void Command_SetHitachiMinRelayValue(int value);
+void Command_AdjustHitachiMinRelayValue(int delta);
+
+bool State_GetHitachiVirtualRequest();
+bool State_GetHitachiVirtualOutput();
+void Command_SetHitachiVirtualRequest(bool enabled);
+void Command_ToggleHitachiVirtualRequest();
+
+// Auto mode state / commands
+void Command_RequestAutoStart();
+void Command_RequestAutoStop();
+void Command_RequestAutoPause();
+
+bool State_GetAutoRunning();
+bool State_GetAutoPaused();
+
+unsigned int State_GetAutoRemainingTime();
+unsigned int State_GetAutoCurrentTime();
+unsigned int State_GetAutoRunDuration();
+
+unsigned int State_GetAutoRunDurationSeconds();
+unsigned int State_GetAutoRunDurationMinutes();
+void Command_SetAutoRunDurationMinutes(unsigned int minutes);
+
+unsigned int State_GetAutoPauseDurationSeconds();
+void Command_SetAutoPauseDurationSeconds(unsigned int seconds);
+
+unsigned int State_GetAutoPenaltyDurationSeconds();
+void Command_SetAutoPenaltyDurationSeconds(unsigned int seconds);
+
+unsigned int State_GetAutoIoOnTimeMs();
+void Command_SetAutoIoOnTimeMs(unsigned int ms);
+
+unsigned int State_GetAutoIoOffTimeMs();
+void Command_SetAutoIoOffTimeMs(unsigned int ms);
+
+byte State_GetAutoOutputMode(int outputIndex);
+void Command_SetAutoOutputMode(int outputIndex, byte mode);
+
+int State_GetAutoOutputInputIndex(int outputIndex);
+void Command_SetAutoOutputInputIndex(int outputIndex, int inputIndex);
+void Command_CycleAutoOutputInputIndex(int outputIndex);
+
+#endif  // EROS_BUILD_HAS_M7_SIDE
 
 // ------------------------------------------------------------
 // M4-facing bridge/control prototypes
 // ------------------------------------------------------------
 
+#if EROS_BUILD_HAS_M4_SIDE
+
+// Status snapshot and command queue processing
 bool EROSM4_ReceiveCommandFromTransport(const EROS_Command & command);
 void State_RefreshControlStatus();
 void State_ProcessPendingCommands();
@@ -28,16 +195,12 @@ void EROSTransport_Setup();
 void State_CopyControlStatus(EROS_ControlStatus & status);
 bool Control_GetAssignedInputForOutput(int outputIndex);
 
+// M4 command normalization helpers
 void Command_NormalizeHitachiSettings();
 void Command_ForceFixedAutoOutputModes();
 
-// Settings implementation prototypes
-bool Settings_SaveAll();
-bool Settings_LoadAll();
-bool Settings_LoadAllOrDefaults();
-void Settings_LoadDefaults();
-bool Settings_Begin();
-int Settings_GetLastError();
+// M4 defaults only. Persistent settings save/load belongs on M7.
+void M4_LoadRuntimeDefaults();
 
 // Control mode function prototypes
 void Init_Idle(void);
@@ -54,9 +217,13 @@ void Control_Task(void);
 void CheckMode(void);
 void RunMode(void);
 
+#endif  // EROS_BUILD_HAS_M4_SIDE
+
 // ------------------------------------------------------------
 // M4-side IO pins, state, and control tables
 // ------------------------------------------------------------
+
+#if EROS_BUILD_HAS_M4_SIDE
 
 // Dedicated system input pins
 // These are used for Start / Stop / Pause only.
@@ -213,19 +380,125 @@ FunctionPointer IdleOps[] = {
   ID_EROSFlex
 };
 
+#endif  // EROS_BUILD_HAS_M4_SIDE
+
+
+// ------------------------------------------------------------
+// M4 performance metrics
+// ------------------------------------------------------------
+
+#if EROS_BUILD_HAS_M4_SIDE
+
+static unsigned long g_m4PerfLoopCounter = 0;
+static unsigned long g_m4PerfLastLoopStartUs = 0;
+static unsigned long g_m4PerfAvgLoopPeriodUs = 0;
+static unsigned long g_m4PerfAvgLoopExecUs = 0;
+
+static void EROSPerf_BeginLoop(unsigned long & loopStartUs)
+{
+  loopStartUs = micros();
+
+  if (g_m4PerfLastLoopStartUs != 0)
+  {
+    unsigned long periodUs = loopStartUs - g_m4PerfLastLoopStartUs;
+
+    if (g_m4PerfAvgLoopPeriodUs == 0)
+    {
+      g_m4PerfAvgLoopPeriodUs = periodUs;
+    }
+    else
+    {
+      // Lightweight exponential moving average. 1/16 new sample.
+      g_m4PerfAvgLoopPeriodUs = ((g_m4PerfAvgLoopPeriodUs * 15UL) + periodUs) / 16UL;
+    }
+  }
+
+  g_m4PerfLastLoopStartUs = loopStartUs;
+}
+
+static void EROSPerf_EndLoop(unsigned long loopStartUs)
+{
+  unsigned long execUs = micros() - loopStartUs;
+
+  if (g_m4PerfAvgLoopExecUs == 0)
+  {
+    g_m4PerfAvgLoopExecUs = execUs;
+  }
+  else
+  {
+    // Lightweight exponential moving average. 1/16 new sample.
+    g_m4PerfAvgLoopExecUs = ((g_m4PerfAvgLoopExecUs * 15UL) + execUs) / 16UL;
+  }
+
+  g_m4PerfLoopCounter++;
+}
+
+unsigned long EROSPerf_GetM4LoopCounter()
+{
+  return g_m4PerfLoopCounter;
+}
+
+unsigned long EROSPerf_GetM4AvgLoopPeriodUs()
+{
+  return g_m4PerfAvgLoopPeriodUs;
+}
+
+unsigned long EROSPerf_GetM4AvgLoopExecUs()
+{
+  return g_m4PerfAvgLoopExecUs;
+}
+
+#endif  // EROS_BUILD_HAS_M4_SIDE
+
+// ------------------------------------------------------------
+// Arduino setup / loop
+// ------------------------------------------------------------
+
 // ------------------------------------------------------------
 // Arduino setup / loop
 // ------------------------------------------------------------
 
 void setup()
 {
-  Serial.begin(57600);
-  EROSTransport_Setup();
+#if EROS_BUILD_HAS_M4_SIDE
+  // M4 does not own the USB Serial monitor in split-core mode.
+  // SerialRPC messages are drained and printed by IOBox_M7.
+  SerialRPC.begin();
+  SerialRPC.println("M4: IOBox_M4 starting");
+  SerialRPC.println("M4_DIAG: before Control_Setup");
+
+  // Set up embedded control functions using the same globals/pin map as the
+  // working single-core simulation.
   Control_Setup();
+
+  SerialRPC.println("M4_DIAG: after Control_Setup");
+  SerialRPC.println("M4_DIAG: before EROSTransport_Setup");
+
+  // Bind the M4-side RPC transport after control state exists.
+  EROSTransport_Setup();
+
+  SerialRPC.println("M4_DIAG: after EROSTransport_Setup");
+  SerialRPC.println("M4_READY_FOR_RPC");
+  SerialRPC.println("M4: IOBox_M4 setup complete");
+#endif
 }
 
 void loop()
 {
+#if EROS_BUILD_HAS_M4_SIDE
+  unsigned long loopStartUs = 0;
+  EROSPerf_BeginLoop(loopStartUs);
+
+  // Process pending M7/UI commands received through RPC transport.
   State_ProcessPendingCommands();
+
+  // Run the same control task used by the working single-core simulation.
   Control_Task();
+
+  EROSPerf_EndLoop(loopStartUs);
+#endif
+
+  // This delay intentionally yields without changing the M7 refresh rate.
+  // The M4 control loop still runs independently of the slower M7 status poll.
+  delay(1);
 }
