@@ -246,7 +246,9 @@ static void Heartbeat()
 {
   unsigned long nowMs = millis();
 
-  if (nowMs - g_lastHeartbeatMs < 2000)
+  const unsigned long heartbeatIntervalMs = g_displayStarted ? 10000UL : 2000UL;
+
+  if (nowMs - g_lastHeartbeatMs < heartbeatIntervalMs)
   {
     return;
   }

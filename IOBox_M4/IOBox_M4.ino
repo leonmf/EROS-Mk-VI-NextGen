@@ -465,19 +465,13 @@ void setup()
   // SerialRPC messages are drained and printed by IOBox_M7.
   SerialRPC.begin();
   SerialRPC.println("M4: IOBox_M4 starting");
-  SerialRPC.println("M4_DIAG: before Control_Setup");
-
   // Set up embedded control functions using the same globals/pin map as the
   // working single-core simulation.
   Control_Setup();
 
-  SerialRPC.println("M4_DIAG: after Control_Setup");
-  SerialRPC.println("M4_DIAG: before EROSTransport_Setup");
-
   // Bind the M4-side RPC transport after control state exists.
   EROSTransport_Setup();
 
-  SerialRPC.println("M4_DIAG: after EROSTransport_Setup");
   SerialRPC.println("M4_READY_FOR_RPC");
   SerialRPC.println("M4: IOBox_M4 setup complete");
 #endif

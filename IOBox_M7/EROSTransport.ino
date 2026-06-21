@@ -142,7 +142,7 @@ void EROSTransport_PollM4Status()
   status.transportCommandQueueDepth = (byte)EROSTransport_ReadM4StatusValue(8);
   status.transportCommandQueueCapacity = (byte)EROSTransport_ReadM4StatusValue(9);
 
-  // Stage 12 compact status masks reported by M4.
+  // Compact status masks reported by M4.
   // These make display indicators reflect actual M4 state rather than M7 intent.
   int outputMask = EROSTransport_ReadM4StatusValue(20);
   int manualMask = EROSTransport_ReadM4StatusValue(21);
@@ -167,7 +167,7 @@ void EROSTransport_PollM4Status()
 
   status.mode = (byte)EROSTransport_ReadM4StatusValue(24);
 
-  // Stage 13 compact Hitachi status from M4.
+  // Compact Hitachi status from M4.
   status.hitachiCurrentOutput = EROSTransport_ReadM4StatusValue(30);
 
   int hitachiModes = EROSTransport_ReadM4StatusValue(31);
@@ -195,7 +195,7 @@ void EROSTransport_PollM4Status()
 
   status.hitachiMinRelayValue = EROSTransport_ReadM4StatusValue(38);
 
-  // Stage 14 compact Auto settings/status from M4.
+  // Compact Auto settings/status from M4.
   int autoFlags = EROSTransport_ReadM4StatusValue(40);
   status.autoRunning = (autoFlags & 0x01) != 0;
   status.autoPaused = (autoFlags & 0x02) != 0;
@@ -225,7 +225,7 @@ void EROSTransport_PollM4Status()
     status.autoOutputInputIndex[i] = (packedAutoInputIndexes >> (i * 2)) & 0x03;
   }
 
-  // Stage 16 performance metrics.
+  // Performance metrics.
   status.m4AvgLoopPeriodUs = (unsigned int)EROSTransport_ReadM4StatusValue(60);
   status.m4AvgLoopExecUs = (unsigned int)EROSTransport_ReadM4StatusValue(61);
   status.m4LoopCounter = (unsigned long)EROSTransport_ReadM4StatusValue(62);

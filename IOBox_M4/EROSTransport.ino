@@ -3,13 +3,10 @@
 
   M4-side transport shim for the EROS Mk VI bridge.
 
-  Current real split mode:
-    - Receives command packets from the M7 over Arduino RPC.
-    - Publishes a minimal loopback/debug status packet back to the M7 over RPC.
-
-  This phase intentionally transports only the loopback/debug subset of the
-  status packet. Full status serialization comes next after the pipe is proven
-  stable.
+  Split-core transport:
+    - Receives compact command packets from the M7 over Arduino RPC.
+    - Provides compact status selectors that the M7 polls for display updates.
+    - Uses a 4-argument command interface because it has proven stable on the Giga RPC layer.
 */
 
 #include "EROSShared.h"
@@ -42,8 +39,7 @@ int EROSTransport_RPCReceiveCommand4(
   command.value = (long)value;
 
   // Packed flags keep the RPC signature at 4 arguments.
-  // Arduino Giga RPC has proven stable with 4 args, while the 5-arg
-  // EROS_M4_Command(...) binding prevented M4 startup in Stage 4.
+  // Keep this interface compact; the Giga RPC layer has been more reliable with it.
   command.boolValue = ((flags & 0x01) != 0);
   command.onSettings = ((flags & 0x02) != 0);
 
@@ -84,16 +80,15 @@ int EROSTransport_RPCGetStatusValue(int selector)
     case 8: return (int)status.transportCommandQueueDepth;
     case 9: return (int)status.transportCommandQueueCapacity;
 
-    // Stage 11 compact M4-to-M7 display status.
-    // These masks allow the M7 display to render actual M4 state without
-    // using a large multi-field RPC return or many per-point selectors.
+    // Compact M4-to-M7 display status.
+    // These masks let the M7 display render actual M4 state without a large RPC payload.
     case 20: return EROSTransport_BoolArrayToMask(status.output, OutSize);
     case 21: return EROSTransport_BoolArrayToMask(status.manualOutputRequest, OutSize);
     case 22: return EROSTransport_BoolArrayToMask(status.input, InSize);
     case 23: return EROSTransport_BoolArrayToMask(status.assignableInput, AssignableInSize);
     case 24: return (int)status.mode;
 
-    // Stage 13 compact Hitachi status.
+    // Compact Hitachi status.
     // Pair selectors pack OFF in low byte and ON in high byte where possible.
     case 30: return status.hitachiCurrentOutput;
     case 31: return ((status.hitachiModeOn & 0xFF) << 8) | (status.hitachiModeOff & 0xFF);
@@ -105,9 +100,8 @@ int EROSTransport_RPCGetStatusValue(int selector)
     case 37: return (status.hitachiPeriodPreciseOff ? 0x01 : 0x00) | (status.hitachiPeriodPreciseOn ? 0x02 : 0x00);
     case 38: return status.hitachiMinRelayValue;
 
-    // Stage 14 compact Auto settings/status from M4.
-    // These let the M7 Auto Settings screen rebuild from M4 truth instead
-    // of falling back to zero/default UI values when the screen is recreated.
+    // Compact Auto settings/status from M4.
+    // These let the M7 Auto Settings screen rebuild from M4 truth.
     case 40: return (status.autoRunning ? 0x01 : 0x00) | (status.autoPaused ? 0x02 : 0x00);
     case 41: return (int)status.autoRemainingTime;
     case 42: return (int)status.autoCurrentTime;
@@ -144,7 +138,7 @@ int EROSTransport_RPCGetStatusValue(int selector)
       return packed;
     }
 
-    // Stage 16 M4 performance metrics.
+    // M4 performance metrics.
     // 60: average loop period, including the loop yield, in microseconds.
     // 61: average active control-loop execution time, excluding the loop yield, in microseconds.
     // 62: loop counter, truncated to int range by the existing RPC return type.
