@@ -34,6 +34,9 @@ void GigaDisplay_Task();
 void EROSTransport_SetM4Ready(bool ready);
 void EROSTransport_PollM4Status();
 void EROSBridgeM7_ProcessCommandQueue();
+int EROSTransport_GetLastStatusSelector();
+unsigned long EROSTransport_GetCompletedSnapshotCounter();
+void GigaDisplay_PrintDiagnostics();
 bool SettingsM7_LoadAll();
 int SettingsM7_GetLastError();
 bool SettingsM7_GetLastOk();
@@ -52,35 +55,96 @@ static unsigned long g_m4ReadySeenMs = 0;
 static unsigned long g_lastLoopbackMs = 0;
 static unsigned long g_lastStatusPollMs = 0;
 static unsigned long g_loopbackRequestId = 0;
+static unsigned long g_lastDiagnosticMs = 0;
 
-static const uint32_t M4_STATUS_POLL_INTERVAL_MS = 50;
+// Read one status selector per slice. A complete 38-selector snapshot takes
+// roughly 75-100 ms, but LVGL/touch is serviced between every RPC call.
+static const uint32_t M4_STATUS_POLL_SLICE_INTERVAL_MS = 2;
 
 static void PrintSerialRPCMessages()
 {
-  String buffer = "";
+  // Avoid repeated heap allocation/fragmentation from a growing Arduino
+  // String. M4 messages are diagnostic text, so a fixed buffer is sufficient.
+  static char buffer[256];
+  size_t length = 0;
+  bool sawText = false;
+  bool sawReadyMarker = false;
 
   while (SerialRPC.available())
   {
-    buffer += (char)SerialRPC.read();
-  }
+    char c = (char)SerialRPC.read();
+    sawText = true;
 
-  if (buffer.length() > 0)
-  {
-    Serial.print(buffer);
-    g_sawM4Text = true;
-
-    if (buffer.indexOf("M4_READY_FOR_RPC") >= 0)
+    if (length < sizeof(buffer) - 1)
     {
-      if (!g_m4Ready)
+      buffer[length++] = c;
+    }
+
+    if (c == '\n' || length >= sizeof(buffer) - 1)
+    {
+      buffer[length] = '\0';
+      Serial.print(buffer);
+
+      if (strstr(buffer, "M4_READY_FOR_RPC") != NULL)
       {
-        g_m4ReadySeenMs = millis();
-        Serial.println("M7: detected M4_READY_FOR_RPC marker");
+        sawReadyMarker = true;
       }
 
-      g_m4Ready = true;
-      EROSTransport_SetM4Ready(true);
+      length = 0;
     }
   }
+
+  if (length > 0)
+  {
+    buffer[length] = '\0';
+    Serial.print(buffer);
+
+    if (strstr(buffer, "M4_READY_FOR_RPC") != NULL)
+    {
+      sawReadyMarker = true;
+    }
+  }
+
+  if (sawText)
+  {
+    g_sawM4Text = true;
+  }
+
+  if (sawReadyMarker)
+  {
+    if (!g_m4Ready)
+    {
+      g_m4ReadySeenMs = millis();
+      Serial.println("M7: detected M4_READY_FOR_RPC marker");
+    }
+
+    g_m4Ready = true;
+    EROSTransport_SetM4Ready(true);
+  }
+}
+
+static void PrintRuntimeDiagnostics()
+{
+  if (!g_displayStarted)
+  {
+    return;
+  }
+
+  const unsigned long nowMs = millis();
+  if (nowMs - g_lastDiagnosticMs < 2000UL)
+  {
+    return;
+  }
+  g_lastDiagnosticMs = nowMs;
+
+  Serial.print("M7_DIAG millis=");
+  Serial.print(nowMs);
+  Serial.print(" lastRpcSelector=");
+  Serial.print(EROSTransport_GetLastStatusSelector());
+  Serial.print(" snapshots=");
+  Serial.print(EROSTransport_GetCompletedSnapshotCounter());
+  Serial.print(" ");
+  GigaDisplay_PrintDiagnostics();
 }
 
 static void TryStartSerialRPC()
@@ -229,7 +293,7 @@ static void RunHealthChecks()
 
   unsigned long nowMs = millis();
 
-  if (nowMs - g_lastStatusPollMs >= M4_STATUS_POLL_INTERVAL_MS)
+  if (nowMs - g_lastStatusPollMs >= M4_STATUS_POLL_SLICE_INTERVAL_MS)
   {
     g_lastStatusPollMs = nowMs;
     EROSTransport_PollM4Status();
@@ -312,9 +376,8 @@ void loop()
     StartDisplayIfReady();
   }
 
-  // Keep LVGL/touch service ahead of synchronous RPC polling. A status poll is
-  // a batch of RPC calls, so servicing the UI first bounds the time between
-  // consecutive lv_timer_handler() calls as tightly as this transport permits.
+  // Keep LVGL/touch service ahead of synchronous RPC work. Status transport is
+  // sliced to one selector per pass so lv_timer_handler() runs between calls.
   if (g_displayStarted)
   {
     GigaDisplay_Task();
@@ -329,5 +392,6 @@ void loop()
   }
 
   Heartbeat();
+  PrintRuntimeDiagnostics();
   delay(1);
 }

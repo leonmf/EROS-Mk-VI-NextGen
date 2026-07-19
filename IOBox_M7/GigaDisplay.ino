@@ -177,12 +177,19 @@ static unsigned long g_screenRefreshLockUntilMs = 0;
 
 enum EROSDeferredNavAction {
   NAV_ACTION_NONE,
+  NAV_ACTION_SHOW_IDLE,
+  NAV_ACTION_SHOW_MANUAL,
+  NAV_ACTION_SHOW_AUTO,
+  NAV_ACTION_SHOW_STATUS,
+  NAV_ACTION_SHOW_AUTO_SETTINGS,
   NAV_ACTION_AUTO_SETTINGS_BACK,
   NAV_ACTION_AUTO_SETTINGS_TIMING,
   NAV_ACTION_AUTO_SETTINGS_OUTPUTS,
   NAV_ACTION_SHOW_HITACHI,
   NAV_ACTION_HITACHI_BACK
 };
+
+static EROSScreenId g_previousScreenIdBeforeHitachi = SCREEN_NONE;
 
 static EROSDeferredNavAction g_pendingNavAction = NAV_ACTION_NONE;
 static unsigned long g_pendingNavActionSetMs = 0;
@@ -324,6 +331,7 @@ static void GigaDisplay_CreateAutoSettingsScreen();
 static void GigaDisplay_CreateStatusScreen();
 static void GigaDisplay_DestroyAutoSettingsScreen();
 static void GigaDisplay_DestroyHitachiScreen();
+static void GigaDisplay_ReleaseInactiveScreen(EROSScreenId screen);
 
 static void GigaDisplay_UpdateHitachiScreen();
 static void GigaDisplay_UpdateHitachiSliderLabelsFromWidgets();
@@ -701,20 +709,28 @@ static void SetIndicatorState(lv_obj_t * indicator, bool state)
   }
 }
 
-static void SetValueLabel(lv_obj_t * label, bool state)
+static void SetLabelTextIfChanged(lv_obj_t * label, const char * text)
 {
-  if (label == NULL) {
+  if (label == NULL || text == NULL) {
     return;
   }
 
-  lv_label_set_text(label, state ? "ON" : "OFF");
+  const char * current = lv_label_get_text(label);
+  if (current != NULL && strcmp(current, text) == 0) {
+    return;
+  }
+
+  lv_label_set_text(label, text);
+}
+
+static void SetValueLabel(lv_obj_t * label, bool state)
+{
+  SetLabelTextIfChanged(label, state ? "ON" : "OFF");
 }
 
 static void SetIdleStatusText(const char * text)
 {
-  if (g_idleStatusLabel != NULL) {
-    lv_label_set_text(g_idleStatusLabel, text);
-  }
+  SetLabelTextIfChanged(g_idleStatusLabel, text);
 }
 
 static void SetIdleStatusError(const char * prefix)
@@ -725,7 +741,7 @@ static void SetIdleStatusError(const char * prefix)
 
   static char buffer[48];
   snprintf(buffer, sizeof(buffer), "%s: %d", prefix, State_GetSettingsLastError());
-  lv_label_set_text(g_idleStatusLabel, buffer);
+  SetLabelTextIfChanged(g_idleStatusLabel, buffer);
 }
 
 static void GigaDisplay_UpdateIdleSettingsResult()
@@ -886,51 +902,91 @@ static void ProcessDeferredNavigation()
   EROSDeferredNavAction action = g_pendingNavAction;
   g_pendingNavAction = NAV_ACTION_NONE;
 
-  if (action == NAV_ACTION_AUTO_SETTINGS_BACK) {
+  if (action == NAV_ACTION_SHOW_IDLE) {
+    EROSScreenId oldScreen = g_currentScreen;
+    GigaDisplay_ShowIdleScreen();
+    GigaDisplay_ReleaseInactiveScreen(oldScreen);
+    HoldScreenRefresh(250UL);
+  }
+  else if (action == NAV_ACTION_SHOW_MANUAL) {
+    GigaDisplay_ShowManualScreen();
+    HoldScreenRefresh(250UL);
+  }
+  else if (action == NAV_ACTION_SHOW_AUTO) {
+    GigaDisplay_ShowAutoScreen();
+    HoldScreenRefresh(250UL);
+  }
+  else if (action == NAV_ACTION_SHOW_STATUS) {
+    GigaDisplay_ShowStatusScreen();
+    HoldScreenRefresh(250UL);
+  }
+  else if (action == NAV_ACTION_SHOW_AUTO_SETTINGS) {
+    EROSScreenId oldScreen = g_currentScreen;
+    // Do not construct two heavy screens at once. Loading the persistent idle
+    // screen lets the old screen be reclaimed before the settings page is
+    // allocated, preserving a large contiguous LVGL free block.
+    GigaDisplay_ShowIdleScreen();
+    GigaDisplay_ReleaseInactiveScreen(oldScreen);
+    GigaDisplay_ShowAutoSettingsScreen();
+    HoldScreenRefresh(250UL);
+  }
+  else if (action == NAV_ACTION_AUTO_SETTINGS_BACK) {
     // Do not delete the Auto Settings screen while navigating away.
     // Also avoid the normal ShowAutoScreen path, which updates Auto widgets
     // before loading the screen. This deferred-safe path loads the existing
     // Auto screen first, then lets the normal display task refresh it later.
+    GigaDisplay_ShowIdleScreen();
+    GigaDisplay_DestroyAutoSettingsScreen();
     GigaDisplay_ShowAutoScreenDeferredSafe();
     HoldScreenRefresh(250UL);
   }
   else if (action == NAV_ACTION_AUTO_SETTINGS_TIMING) {
     if (g_autoSettingsPage != 0) {
+      // Never delete the active screen. Move to the persistent idle screen,
+      // synchronously release the old settings page, then build the new page.
+      GigaDisplay_ShowIdleScreen();
       g_autoSettingsPage = 0;
-      LeaveCurrentScreen();
       GigaDisplay_DestroyAutoSettingsScreen();
       GigaDisplay_ShowAutoSettingsScreen();
     }
   }
   else if (action == NAV_ACTION_AUTO_SETTINGS_OUTPUTS) {
     if (g_autoSettingsPage != 1) {
+      GigaDisplay_ShowIdleScreen();
       g_autoSettingsPage = 1;
-      LeaveCurrentScreen();
       GigaDisplay_DestroyAutoSettingsScreen();
       GigaDisplay_ShowAutoSettingsScreen();
     }
   }
   else if (action == NAV_ACTION_SHOW_HITACHI) {
+    EROSScreenId oldScreen = g_currentScreen;
+    GigaDisplay_ShowIdleScreen();
+    GigaDisplay_ReleaseInactiveScreen(oldScreen);
     GigaDisplay_ShowHitachiScreen();
+    // ShowHitachiScreen saw Idle as the active staging screen. Preserve the
+    // actual origin so Back recreates the correct screen.
+    g_previousScreenIdBeforeHitachi = oldScreen;
     HoldScreenRefresh(250UL);
   }
   else if (action == NAV_ACTION_HITACHI_BACK) {
-    lv_obj_t * previousScreen = g_previousScreenBeforeHitachi;
+    EROSScreenId previousScreen = g_previousScreenIdBeforeHitachi;
 
-    // Keep the Hitachi screen allocated. Deleting an event's source screen
-    // during or shortly after its Back callback is an intermittent LVGL
-    // lifetime hazard.
-    if (previousScreen == g_manualScreen) {
+    // Stage through Idle, then delete Hitachi outside its event callback before
+    // rebuilding the previous heavy screen.
+    GigaDisplay_ShowIdleScreen();
+    GigaDisplay_DestroyHitachiScreen();
+
+    if (previousScreen == SCREEN_MANUAL) {
       GigaDisplay_ShowManualScreen();
     }
-    else if (previousScreen == g_autoScreen) {
+    else if (previousScreen == SCREEN_AUTO) {
       GigaDisplay_ShowAutoScreenDeferredSafe();
     }
-    else if (previousScreen == g_statusScreen) {
+    else if (previousScreen == SCREEN_STATUS) {
       GigaDisplay_ShowStatusScreen();
     }
     else {
-      GigaDisplay_ShowIdleScreen();
+      // Idle is already active.
     }
 
     HoldScreenRefresh(250UL);
@@ -1037,10 +1093,36 @@ void GigaDisplay_Task()
 
 }
 
+void GigaDisplay_PrintDiagnostics()
+{
+  lv_mem_monitor_t memory;
+  lv_mem_monitor(&memory);
+
+  Serial.print("screen=");
+  Serial.print((int)g_currentScreen);
+  Serial.print(" building=");
+  Serial.print(g_screenBuilding ? 1 : 0);
+  Serial.print(" refreshLocked=");
+  Serial.print(g_screenRefreshLocked ? 1 : 0);
+  Serial.print(" pendingNav=");
+  Serial.print((int)g_pendingNavAction);
+  Serial.print(" lvFree=");
+  Serial.print((unsigned long)memory.free_size);
+  Serial.print(" lvBiggest=");
+  Serial.print((unsigned long)memory.free_biggest_size);
+  Serial.print(" lvUsedPct=");
+  Serial.print((unsigned int)memory.used_pct);
+  Serial.print(" lvFragPct=");
+  Serial.println((unsigned int)memory.frag_pct);
+}
+
 static void GigaDisplay_DestroyAutoSettingsScreen()
 {
   if (g_autoSettingsScreen != NULL) {
-    lv_obj_del_async(g_autoSettingsScreen);
+    // All callers first load a different screen and run outside LVGL event
+    // callbacks, so immediate deletion is safe and avoids a pending async
+    // delete retaining stale object/event state.
+    lv_obj_del(g_autoSettingsScreen);
   }
 
   g_autoSettingsScreen = NULL;
@@ -1067,7 +1149,7 @@ static void GigaDisplay_DestroyAutoSettingsScreen()
 static void GigaDisplay_DestroyHitachiScreen()
 {
   if (g_hitachiScreen != NULL) {
-    lv_obj_del_async(g_hitachiScreen);
+    lv_obj_del(g_hitachiScreen);
   }
 
   g_hitachiScreen = NULL;
@@ -1090,6 +1172,35 @@ static void GigaDisplay_DestroyHitachiScreen()
   g_hitachiPeriodValueLabel = NULL;
 
   g_previousScreenBeforeHitachi = NULL;
+  g_previousScreenIdBeforeHitachi = SCREEN_NONE;
+}
+
+static void GigaDisplay_ReleaseInactiveScreen(EROSScreenId screen)
+{
+  // Called only after a different screen has been loaded and only from the
+  // deferred-navigation path, never from an LVGL event callback.
+  if (screen == SCREEN_MANUAL && g_manualScreen != NULL) {
+    lv_obj_del(g_manualScreen);
+    g_manualScreen = NULL;
+    g_manualScreenBuilt = false;
+    g_manualCurrentOutputLabel = NULL;
+  }
+  else if (screen == SCREEN_AUTO && g_autoScreen != NULL) {
+    lv_obj_del(g_autoScreen);
+    g_autoScreen = NULL;
+    g_autoScreenBuilt = false;
+    g_autoStatusLabel = NULL;
+    g_autoRemainingLabel = NULL;
+    g_autoCurrentOutputLabel = NULL;
+  }
+  else if (screen == SCREEN_STATUS && g_statusScreen != NULL) {
+    lv_obj_del(g_statusScreen);
+    g_statusScreen = NULL;
+    g_statusScreenBuilt = false;
+    for (int i = 0; i < STATUS_DEBUG_ROW_COUNT; i++) {
+      g_statusDebugValueLabels[i] = NULL;
+    }
+  }
 }
 
 
@@ -1242,7 +1353,7 @@ static void GigaDisplay_SetStatusDebugValue(int row, const char * valueText)
   }
 
   if (g_statusDebugValueLabels[row] != NULL) {
-    lv_label_set_text(g_statusDebugValueLabels[row], valueText);
+    SetLabelTextIfChanged(g_statusDebugValueLabels[row], valueText);
   }
 }
 
@@ -1461,7 +1572,7 @@ void GigaDisplay_UpdateManualIndicators()
   if (g_manualCurrentOutputLabel != NULL) {
     char buffer[32];
     snprintf(buffer, sizeof(buffer), "Output: %d%%", State_GetHitachiCurrentOutput());
-    lv_label_set_text(g_manualCurrentOutputLabel, buffer);
+    SetLabelTextIfChanged(g_manualCurrentOutputLabel, buffer);
   }
 }
 
@@ -1621,14 +1732,14 @@ static void GigaDisplay_UpdateAutoScreen()
 
   if (State_GetAutoRunning()) {
     if (State_GetAutoPaused()) {
-      lv_label_set_text(g_autoStatusLabel, "Status: Paused");
+      SetLabelTextIfChanged(g_autoStatusLabel, "Status: Paused");
     }
     else {
-      lv_label_set_text(g_autoStatusLabel, "Status: Running");
+      SetLabelTextIfChanged(g_autoStatusLabel, "Status: Running");
     }
   }
   else {
-    lv_label_set_text(g_autoStatusLabel, "Status: Stopped");
+    SetLabelTextIfChanged(g_autoStatusLabel, "Status: Stopped");
   }
 
   char buffer[40];
@@ -1637,10 +1748,10 @@ static void GigaDisplay_UpdateAutoScreen()
 
   char timeBuffer[64];
   snprintf(timeBuffer, sizeof(timeBuffer), "Remaining: %s", buffer);
-  lv_label_set_text(g_autoRemainingLabel, timeBuffer);
+  SetLabelTextIfChanged(g_autoRemainingLabel, timeBuffer);
 
   snprintf(timeBuffer, sizeof(timeBuffer), "Hitachi Output: %d%%", State_GetHitachiCurrentOutput());
-  lv_label_set_text(g_autoCurrentOutputLabel, timeBuffer);
+  SetLabelTextIfChanged(g_autoCurrentOutputLabel, timeBuffer);
 
   for (int i = 0; i < InSize; i++) {
     bool state = State_GetInput(i);
@@ -1825,27 +1936,27 @@ static void GigaDisplay_UpdateAutoSettingsScreen()
 
     snprintf(buffer, sizeof(buffer), "%u min", runMinutes);
     if (g_autoRunDurationValueLabel != NULL) {
-      lv_label_set_text(g_autoRunDurationValueLabel, buffer);
+      SetLabelTextIfChanged(g_autoRunDurationValueLabel, buffer);
     }
 
     snprintf(buffer, sizeof(buffer), "%u s", pauseSeconds);
     if (g_autoPauseDurationValueLabel != NULL) {
-      lv_label_set_text(g_autoPauseDurationValueLabel, buffer);
+      SetLabelTextIfChanged(g_autoPauseDurationValueLabel, buffer);
     }
 
     snprintf(buffer, sizeof(buffer), "%u s", penaltySeconds);
     if (g_autoPenaltyDurationValueLabel != NULL) {
-      lv_label_set_text(g_autoPenaltyDurationValueLabel, buffer);
+      SetLabelTextIfChanged(g_autoPenaltyDurationValueLabel, buffer);
     }
 
     AutoSettings_FormatMs(buffer, sizeof(buffer), onMs);
     if (g_autoOnTimeValueLabel != NULL) {
-      lv_label_set_text(g_autoOnTimeValueLabel, buffer);
+      SetLabelTextIfChanged(g_autoOnTimeValueLabel, buffer);
     }
 
     AutoSettings_FormatMs(buffer, sizeof(buffer), offMs);
     if (g_autoOffTimeValueLabel != NULL) {
-      lv_label_set_text(g_autoOffTimeValueLabel, buffer);
+      SetLabelTextIfChanged(g_autoOffTimeValueLabel, buffer);
     }
   }
 
@@ -1890,27 +2001,27 @@ static void GigaDisplay_UpdateAutoSettingsSliderLabelsFromWidgets()
 
   snprintf(buffer, sizeof(buffer), "%d min", runMinutes);
   if (g_autoRunDurationValueLabel != NULL) {
-    lv_label_set_text(g_autoRunDurationValueLabel, buffer);
+    SetLabelTextIfChanged(g_autoRunDurationValueLabel, buffer);
   }
 
   snprintf(buffer, sizeof(buffer), "%d s", pauseSeconds);
   if (g_autoPauseDurationValueLabel != NULL) {
-    lv_label_set_text(g_autoPauseDurationValueLabel, buffer);
+    SetLabelTextIfChanged(g_autoPauseDurationValueLabel, buffer);
   }
 
   snprintf(buffer, sizeof(buffer), "%d s", penaltySeconds);
   if (g_autoPenaltyDurationValueLabel != NULL) {
-    lv_label_set_text(g_autoPenaltyDurationValueLabel, buffer);
+    SetLabelTextIfChanged(g_autoPenaltyDurationValueLabel, buffer);
   }
 
   AutoSettings_FormatMs(buffer, sizeof(buffer), onMs);
   if (g_autoOnTimeValueLabel != NULL) {
-    lv_label_set_text(g_autoOnTimeValueLabel, buffer);
+    SetLabelTextIfChanged(g_autoOnTimeValueLabel, buffer);
   }
 
   AutoSettings_FormatMs(buffer, sizeof(buffer), offMs);
   if (g_autoOffTimeValueLabel != NULL) {
-    lv_label_set_text(g_autoOffTimeValueLabel, buffer);
+    SetLabelTextIfChanged(g_autoOffTimeValueLabel, buffer);
   }
 }
 
@@ -1924,7 +2035,7 @@ static void GigaDisplay_UpdateAutoOutputModeLabel(int outputIndex, byte mode)
   g_autoOutputModeUiValue[outputIndex] = mode;
 
   if (g_autoOutputModeLabels[outputIndex] != NULL) {
-    lv_label_set_text(g_autoOutputModeLabels[outputIndex], AUTO_OUT_MODE_NAMES[mode]);
+    SetLabelTextIfChanged(g_autoOutputModeLabels[outputIndex], AUTO_OUT_MODE_NAMES[mode]);
   }
 }
 
@@ -1938,7 +2049,7 @@ static void GigaDisplay_UpdateAutoOutputInputLabel(int outputIndex, int inputInd
   g_autoOutputInputUiIndex[outputIndex] = inputIndex;
 
   if (g_autoOutputInputLabels[outputIndex] != NULL) {
-    lv_label_set_text(g_autoOutputInputLabels[outputIndex], AssignableInputLabels[inputIndex]);
+    SetLabelTextIfChanged(g_autoOutputInputLabels[outputIndex], AssignableInputLabels[inputIndex]);
   }
 }
 
@@ -2069,6 +2180,7 @@ void GigaDisplay_ShowHitachiScreen()
   }
 
   g_previousScreenBeforeHitachi = lv_scr_act();
+  g_previousScreenIdBeforeHitachi = g_currentScreen;
 
   LeaveCurrentScreen();
   BeginBuildScreen(SCREEN_HITACHI);
@@ -2110,7 +2222,7 @@ static void GigaDisplay_UpdateHitachiScreen()
 
   int mode = State_GetHitachiMode(g_hitachiEditingOnSettings);
 
-  lv_label_set_text(
+  SetLabelTextIfChanged(
     g_hitachiEditorLabel,
     g_hitachiEditingOnSettings ? "Editing: ON settings" : "Editing: OFF settings"
   );
@@ -2118,17 +2230,17 @@ static void GigaDisplay_UpdateHitachiScreen()
   char buffer[32];
 
   snprintf(buffer, sizeof(buffer), "Mode: %s", Hitachi_GetModeName(mode));
-  lv_label_set_text(g_hitachiModeLabel, buffer);
+  SetLabelTextIfChanged(g_hitachiModeLabel, buffer);
 
   snprintf(buffer, sizeof(buffer), "Output: %d%%", State_GetHitachiCurrentOutput());
-  lv_label_set_text(g_hitachiCurrentOutputLabel, buffer);
+  SetLabelTextIfChanged(g_hitachiCurrentOutputLabel, buffer);
 
-  lv_label_set_text(
+  SetLabelTextIfChanged(
     g_hitachiDimmerEnableLabel,
     State_GetDimmerEnabledRequest() ? "Dimmer: ON" : "Dimmer: OFF"
   );
 
-  lv_label_set_text(
+  SetLabelTextIfChanged(
     g_hitachiPeriodModeLabel,
     g_hitachiPeriodPreciseMode ? "Period: Precise" : "Period: Coarse"
   );
@@ -2139,16 +2251,16 @@ static void GigaDisplay_UpdateHitachiScreen()
   lv_slider_set_value(g_hitachiPeriodSlider, Hitachi_PeriodMsToSlider(periodMs), LV_ANIM_OFF);
 
   snprintf(buffer, sizeof(buffer), "%d%%", setPoint);
-  lv_label_set_text(g_hitachiSetPointValueLabel, buffer);
+  SetLabelTextIfChanged(g_hitachiSetPointValueLabel, buffer);
 
   snprintf(buffer, sizeof(buffer), "%d%%", maxValue);
-  lv_label_set_text(g_hitachiMaxValueLabel, buffer);
+  SetLabelTextIfChanged(g_hitachiMaxValueLabel, buffer);
 
   snprintf(buffer, sizeof(buffer), "%d%%", minValue);
-  lv_label_set_text(g_hitachiMinValueLabel, buffer);
+  SetLabelTextIfChanged(g_hitachiMinValueLabel, buffer);
 
   Hitachi_FormatPeriod(buffer, sizeof(buffer), periodMs);
-  lv_label_set_text(g_hitachiPeriodValueLabel, buffer);
+  SetLabelTextIfChanged(g_hitachiPeriodValueLabel, buffer);
 
   g_hitachiUiRefreshing = false;
 }
@@ -2163,23 +2275,23 @@ static void GigaDisplay_UpdateHitachiSliderLabelsFromWidgets()
 
   if (g_hitachiSetPointSlider != NULL && g_hitachiSetPointValueLabel != NULL) {
     snprintf(buffer, sizeof(buffer), "%d%%", lv_slider_get_value(g_hitachiSetPointSlider));
-    lv_label_set_text(g_hitachiSetPointValueLabel, buffer);
+    SetLabelTextIfChanged(g_hitachiSetPointValueLabel, buffer);
   }
 
   if (g_hitachiMaxSlider != NULL && g_hitachiMaxValueLabel != NULL) {
     snprintf(buffer, sizeof(buffer), "%d%%", lv_slider_get_value(g_hitachiMaxSlider));
-    lv_label_set_text(g_hitachiMaxValueLabel, buffer);
+    SetLabelTextIfChanged(g_hitachiMaxValueLabel, buffer);
   }
 
   if (g_hitachiMinSlider != NULL && g_hitachiMinValueLabel != NULL) {
     snprintf(buffer, sizeof(buffer), "%d%%", lv_slider_get_value(g_hitachiMinSlider));
-    lv_label_set_text(g_hitachiMinValueLabel, buffer);
+    SetLabelTextIfChanged(g_hitachiMinValueLabel, buffer);
   }
 
   if (g_hitachiPeriodSlider != NULL && g_hitachiPeriodValueLabel != NULL) {
     int periodMs = Hitachi_PeriodSliderToMs(lv_slider_get_value(g_hitachiPeriodSlider));
     Hitachi_FormatPeriod(buffer, sizeof(buffer), periodMs);
-    lv_label_set_text(g_hitachiPeriodValueLabel, buffer);
+    SetLabelTextIfChanged(g_hitachiPeriodValueLabel, buffer);
   }
 }
 
@@ -2248,7 +2360,7 @@ static void GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue()
 
   char buffer[32];
   snprintf(buffer, sizeof(buffer), "Min: %d%%", g_hitachiRelayMinUiValue);
-  lv_label_set_text(g_hitachiRelayMinValueLabel, buffer);
+  SetLabelTextIfChanged(g_hitachiRelayMinValueLabel, buffer);
 }
 
 // ------------------------------------------------------------
@@ -2257,12 +2369,12 @@ static void GigaDisplay_UpdateHitachiRelayMinLabelFromUiValue()
 
 static void StatusButton_Event(lv_event_t * e)
 {
-  GigaDisplay_ShowStatusScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_SHOW_STATUS);
 }
 
 static void StatusBackButton_Event(lv_event_t * e)
 {
-  GigaDisplay_ShowIdleScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_SHOW_IDLE);
 }
 
 static void StatusPingButton_Event(lv_event_t * e)
@@ -2274,19 +2386,19 @@ static void StatusPingButton_Event(lv_event_t * e)
 static void ManualButton_Event(lv_event_t * e)
 {
   Command_SetMode(BridgeMode);
-  GigaDisplay_ShowManualScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_SHOW_MANUAL);
 }
 
 static void AutoButton_Event(lv_event_t * e)
 {
   Command_SetMode(EROSFlexMode);
-  GigaDisplay_ShowAutoScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_SHOW_AUTO);
 }
 
 static void BackButton_Event(lv_event_t * e)
 {
   Command_SetMode(BridgeMode);
-  GigaDisplay_ShowIdleScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_SHOW_IDLE);
 }
 
 static void AutoStartButton_Event(lv_event_t * e)
@@ -2295,7 +2407,7 @@ static void AutoStartButton_Event(lv_event_t * e)
   Command_RequestAutoStart();
 
   if (g_autoStatusLabel != NULL) {
-    lv_label_set_text(g_autoStatusLabel, "Status: Start Requested");
+    SetLabelTextIfChanged(g_autoStatusLabel, "Status: Start Requested");
   }
 
   g_autoSkipNextAutoRefresh = true;
@@ -2306,7 +2418,7 @@ static void AutoStopButton_Event(lv_event_t * e)
   Command_RequestAutoStop();
 
   if (g_autoStatusLabel != NULL) {
-    lv_label_set_text(g_autoStatusLabel, "Status: Stop Requested");
+    SetLabelTextIfChanged(g_autoStatusLabel, "Status: Stop Requested");
   }
 
   g_autoSkipNextAutoRefresh = true;
@@ -2317,7 +2429,7 @@ static void AutoPauseButton_Event(lv_event_t * e)
   Command_RequestAutoPause();
 
   if (g_autoStatusLabel != NULL) {
-    lv_label_set_text(g_autoStatusLabel, "Status: Pause Requested");
+    SetLabelTextIfChanged(g_autoStatusLabel, "Status: Pause Requested");
   }
 
   g_autoSkipNextAutoRefresh = true;
@@ -2325,7 +2437,7 @@ static void AutoPauseButton_Event(lv_event_t * e)
 
 static void AutoBackButton_Event(lv_event_t * e)
 {
-  GigaDisplay_ShowIdleScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_SHOW_IDLE);
 }
 
 static void OutputToggle_Event(lv_event_t * e)
@@ -2356,7 +2468,7 @@ static void OutputToggle_Event(lv_event_t * e)
 
 static void AutoSettingsButton_Event(lv_event_t * e)
 {
-  GigaDisplay_ShowAutoSettingsScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_SHOW_AUTO_SETTINGS);
 }
 
 static void AutoSettingsBackButton_Event(lv_event_t * e)
