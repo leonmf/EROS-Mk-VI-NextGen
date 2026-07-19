@@ -26,6 +26,7 @@
 #include "Arduino_H7_Video.h"
 #include "Arduino_GigaDisplayTouch.h"
 #include "lvgl.h"
+#include "platform/mbed_stats.h"
 
 #include "EROSShared.h"
 
@@ -34,6 +35,9 @@ void GigaDisplay_Task();
 void EROSTransport_SetM4Ready(bool ready);
 void EROSTransport_PollM4Status();
 void EROSBridgeM7_ProcessCommandQueue();
+void EROSWebServer_Setup();
+void EROSWebServer_Task();
+void EROSWebServer_SuspendFor(unsigned long durationMs);
 bool SettingsM7_LoadAll();
 int SettingsM7_GetLastError();
 bool SettingsM7_GetLastOk();
@@ -353,6 +357,7 @@ void loop()
   if (g_displayStarted)
   {
     GigaDisplay_Task();
+    EROSWebServer_Setup();
   }
 
   if (g_serialRpcStarted)
@@ -361,6 +366,11 @@ void loop()
     // lv_timer_handler() has returned.
     EROSBridgeM7_ProcessCommandQueue();
     RunHealthChecks();
+  }
+
+  if (g_displayStarted)
+  {
+    EROSWebServer_Task();
   }
 
   Heartbeat();

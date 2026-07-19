@@ -25,6 +25,7 @@
 
 #define M7_SETTINGS_MOUNT_NAME "fs"
 #define M7_SETTINGS_FILE_PATH  "/fs/eros_mkvi_settings_m7.bin"
+#define M7_SETTINGS_QSPI_PARTITION 4
 
 static bool g_m7SettingsStorageInitialized = false;
 static int g_m7SettingsLastError = 0;
@@ -36,6 +37,23 @@ static unsigned long g_m7SettingsResultCounter = 0;
 static mbed::BlockDevice * g_m7QspiRoot = NULL;
 static mbed::MBRBlockDevice * g_m7SettingsPartition = NULL;
 static mbed::FATFileSystem g_m7SettingsFS(M7_SETTINGS_MOUNT_NAME);
+
+static void SettingsM7_End()
+{
+  if (!g_m7SettingsStorageInitialized) {
+    return;
+  }
+
+  g_m7SettingsFS.unmount();
+
+  if (g_m7SettingsPartition != NULL) {
+    g_m7SettingsPartition->deinit();
+    delete g_m7SettingsPartition;
+    g_m7SettingsPartition = NULL;
+  }
+
+  g_m7SettingsStorageInitialized = false;
+}
 
 struct EROS_M7PersistedSettings
 {
@@ -146,52 +164,58 @@ bool SettingsM7_Begin()
     return false;
   }
 
-  for (int partitionNumber = 1; partitionNumber <= 4; partitionNumber++) {
-    Serial.print("M7 Settings: trying QSPI partition ");
-    Serial.println(partitionNumber);
+  // Partition 1 is owned by the Wi-Fi firmware and certificate filesystem
+  // mounted by the GIGA WiFi library as /wlan. Mounting it a second time as
+  // /fs gives two FATFileSystem instances concurrent ownership of the same
+  // volume and is unsafe once Wi-Fi is active. Keep application settings on
+  // the QSPI user-data partition instead.
+  const int partitionNumber = M7_SETTINGS_QSPI_PARTITION;
 
-    mbed::MBRBlockDevice * testPartition =
-      new mbed::MBRBlockDevice(g_m7QspiRoot, partitionNumber);
+  Serial.print("M7 Settings: trying QSPI user-data partition ");
+  Serial.println(partitionNumber);
 
-    if (testPartition == NULL) {
-      continue;
-    }
+  mbed::MBRBlockDevice * testPartition =
+    new mbed::MBRBlockDevice(g_m7QspiRoot, partitionNumber);
 
-    int result = testPartition->init();
-
-    if (result != 0) {
-      Serial.print("M7 Settings: partition init failed for partition ");
-      Serial.print(partitionNumber);
-      Serial.print(", error: ");
-      Serial.println(result);
-      delete testPartition;
-      continue;
-    }
-
-    result = g_m7SettingsFS.mount(testPartition);
-
-    if (result == 0) {
-      g_m7SettingsPartition = testPartition;
-      g_m7SettingsStorageInitialized = true;
-      g_m7SettingsLastError = 0;
-      g_m7SettingsMountedPartition = partitionNumber;
-
-      Serial.print("M7 Settings: mounted QSPI FAT filesystem on partition ");
-      Serial.println(partitionNumber);
-      return true;
-    }
-
-    Serial.print("M7 Settings: FAT mount failed for partition ");
-    Serial.print(partitionNumber);
-    Serial.print(", error: ");
-    Serial.println(result);
-
-    testPartition->deinit();
-    delete testPartition;
+  if (testPartition == NULL) {
+    g_m7SettingsLastError = -30002;
+    Serial.println("M7 Settings: unable to allocate user-data partition.");
+    return false;
   }
 
+  int result = testPartition->init();
+
+  if (result != 0) {
+    Serial.print("M7 Settings: user-data partition init failed, error: ");
+    Serial.println(result);
+    delete testPartition;
+    g_m7SettingsLastError = -30002;
+    return false;
+  }
+
+  result = g_m7SettingsFS.mount(testPartition);
+
+  if (result == 0) {
+    g_m7SettingsPartition = testPartition;
+    g_m7SettingsStorageInitialized = true;
+    g_m7SettingsLastError = 0;
+    g_m7SettingsMountedPartition = partitionNumber;
+
+    Serial.print("M7 Settings: mounted QSPI FAT user-data partition ");
+    Serial.println(partitionNumber);
+    return true;
+  }
+
+  Serial.print("M7 Settings: FAT mount failed for user-data partition ");
+  Serial.print(partitionNumber);
+  Serial.print(", error: ");
+  Serial.println(result);
+
+  testPartition->deinit();
+  delete testPartition;
+
   g_m7SettingsLastError = -30002;
-  Serial.println("M7 Settings: no mountable QSPI FAT partition found.");
+  Serial.println("M7 Settings: QSPI user-data partition is not FAT formatted.");
   return false;
 }
 
@@ -315,6 +339,7 @@ bool SettingsM7_SaveAll()
   FILE * file = fopen(M7_SETTINGS_FILE_PATH, "wb");
 
   if (file == NULL) {
+    SettingsM7_End();
     SettingsM7_RecordResult(EROS_SETTINGS_ACTION_SAVE, false, -30003);
     Serial.println("M7 Settings: failed to open file for writing.");
     return false;
@@ -323,6 +348,7 @@ bool SettingsM7_SaveAll()
   size_t written = fwrite(&settings, 1, sizeof(settings), file);
   fflush(file);
   fclose(file);
+  SettingsM7_End();
 
   if (written != sizeof(settings)) {
     SettingsM7_RecordResult(EROS_SETTINGS_ACTION_SAVE, false, -30004);
@@ -351,6 +377,7 @@ bool SettingsM7_LoadAll()
   FILE * file = fopen(M7_SETTINGS_FILE_PATH, "rb");
 
   if (file == NULL) {
+    SettingsM7_End();
     SettingsM7_RecordResult(EROS_SETTINGS_ACTION_LOAD, false, -30005);
     Serial.println("M7 Settings: file not found.");
     return false;
@@ -361,6 +388,7 @@ bool SettingsM7_LoadAll()
 
   size_t bytesRead = fread(&settings, 1, sizeof(settings), file);
   fclose(file);
+  SettingsM7_End();
 
   if (bytesRead != sizeof(settings)) {
     SettingsM7_RecordResult(EROS_SETTINGS_ACTION_LOAD, false, -30006);

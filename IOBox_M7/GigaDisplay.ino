@@ -193,6 +193,10 @@ static EROSScreenId g_previousScreenIdBeforeHitachi = SCREEN_NONE;
 
 static EROSDeferredNavAction g_pendingNavAction = NAV_ACTION_NONE;
 static unsigned long g_pendingNavActionSetMs = 0;
+static unsigned long g_navigationReleasedSinceMs = 0;
+static unsigned long g_navigationWebPausedSinceMs = 0;
+static byte g_pendingSettingsAction = EROS_SETTINGS_ACTION_NONE;
+static unsigned long g_pendingSettingsActionSetMs = 0;
 
 static bool g_manualScreenBuilt = false;
 static bool g_autoScreenBuilt = false;
@@ -879,11 +883,46 @@ static void ScheduleDeferredNavigation(EROSDeferredNavAction action)
 
   g_pendingNavAction = action;
   g_pendingNavActionSetMs = millis();
+  g_navigationReleasedSinceMs = 0;
+  g_navigationWebPausedSinceMs = 0;
 
   // Stop widget refresh immediately. The actual screen change is handled after
   // lv_timer_handler() returns, so we do not delete/load screens from inside
   // the LVGL event callback that came from the current screen.
   HoldScreenRefresh(200UL);
+}
+
+static bool NavigationInputIsSafelyReleased()
+{
+  lv_indev_t * inputDevice = NULL;
+
+  while ((inputDevice = lv_indev_get_next(inputDevice)) != NULL) {
+    if (lv_indev_get_state(inputDevice) != LV_INDEV_STATE_RELEASED) {
+      g_navigationReleasedSinceMs = 0;
+      return false;
+    }
+  }
+
+  const unsigned long nowMs = millis();
+
+  if (g_navigationReleasedSinceMs == 0) {
+    g_navigationReleasedSinceMs = nowMs;
+    return false;
+  }
+
+  if (nowMs - g_navigationReleasedSinceMs < 100UL) {
+    return false;
+  }
+
+  // Forget the object associated with the completed press before loading or
+  // deleting any screen. This prevents the touch device from retaining a
+  // pointer into the old screen's object tree across navigation.
+  inputDevice = NULL;
+  while ((inputDevice = lv_indev_get_next(inputDevice)) != NULL) {
+    lv_indev_reset(inputDevice, NULL);
+  }
+
+  return true;
 }
 
 static void ProcessDeferredNavigation()
@@ -899,8 +938,32 @@ static void ProcessDeferredNavigation()
     return;
   }
 
+  if (!NavigationInputIsSafelyReleased()) {
+    return;
+  }
+
+  // Quiesce the HTTP socket before changing LVGL screens. Wi-Fi/TCP runs in
+  // Mbed worker threads, so sequential calls in loop() alone do not prevent
+  // network buffer activity during a screen load.
+  if (g_navigationWebPausedSinceMs == 0) {
+    EROSWebServer_SuspendFor(1000UL);
+    g_navigationWebPausedSinceMs = millis();
+    return;
+  }
+
+  if (millis() - g_navigationWebPausedSinceMs < 150UL) {
+    return;
+  }
+
   EROSDeferredNavAction action = g_pendingNavAction;
   g_pendingNavAction = NAV_ACTION_NONE;
+  g_navigationReleasedSinceMs = 0;
+  g_navigationWebPausedSinceMs = 0;
+
+  Serial.print("M7_NAV from=");
+  Serial.print((int)g_currentScreen);
+  Serial.print(" action=");
+  Serial.println((int)action);
 
   if (action == NAV_ACTION_SHOW_IDLE) {
     EROSScreenId oldScreen = g_currentScreen;
@@ -971,10 +1034,13 @@ static void ProcessDeferredNavigation()
   else if (action == NAV_ACTION_HITACHI_BACK) {
     EROSScreenId previousScreen = g_previousScreenIdBeforeHitachi;
 
-    // Stage through Idle, then delete Hitachi outside its event callback before
-    // rebuilding the previous heavy screen.
+    // Stage through Idle, but keep the Hitachi screen alive. Diagnostics showed
+    // healthy LVGL/Mbed heaps followed by an immediate SOS specifically when
+    // deleting the screen that owned the Back button. Even after the deferred
+    // delay, LVGL/touch can retain event references to that object tree.
+    // Retaining this one screen costs about 12 KB of the LVGL heap and avoids
+    // invalidating those references. It is reused on the next Hitachi visit.
     GigaDisplay_ShowIdleScreen();
-    GigaDisplay_DestroyHitachiScreen();
 
     if (previousScreen == SCREEN_MANUAL) {
       GigaDisplay_ShowManualScreen();
@@ -991,6 +1057,95 @@ static void ProcessDeferredNavigation()
 
     HoldScreenRefresh(250UL);
   }
+}
+
+static void PrintM7RuntimeDiagnostics()
+{
+  static unsigned long lastDiagnosticMs = 0;
+  const unsigned long nowMs = millis();
+
+  if (nowMs - lastDiagnosticMs < 2000UL) {
+    return;
+  }
+  lastDiagnosticMs = nowMs;
+
+  lv_mem_monitor_t lvStats;
+  lv_mem_monitor(&lvStats);
+
+  mbed_stats_heap_t heapStats;
+  mbed_stats_heap_get(&heapStats);
+
+  static mbed_stats_thread_t threadStats[16];
+  const size_t threadCount =
+    mbed_stats_thread_get_each(threadStats, sizeof(threadStats) / sizeof(threadStats[0]));
+
+  uint32_t minimumStackFree = 0xFFFFFFFFUL;
+  const char * minimumStackThread = "?";
+
+  for (size_t i = 0; i < threadCount; i++) {
+    if (threadStats[i].stack_space < minimumStackFree) {
+      minimumStackFree = threadStats[i].stack_space;
+      minimumStackThread =
+        threadStats[i].name != NULL ? threadStats[i].name : "?";
+    }
+  }
+
+  Serial.print("M7_MEM ms=");
+  Serial.print(nowMs);
+  Serial.print(" screen=");
+  Serial.print((int)g_currentScreen);
+  Serial.print(" build=");
+  Serial.print(g_screenBuilding ? 1 : 0);
+  Serial.print(" nav=");
+  Serial.print((int)g_pendingNavAction);
+  Serial.print(" settings=");
+  Serial.print((int)g_pendingSettingsAction);
+  Serial.print(" lvFree=");
+  Serial.print(lvStats.free_size);
+  Serial.print(" lvBig=");
+  Serial.print(lvStats.free_biggest_size);
+  Serial.print(" lvFrag=");
+  Serial.print(lvStats.frag_pct);
+  Serial.print(" heapCur=");
+  Serial.print(heapStats.current_size);
+  Serial.print(" heapMax=");
+  Serial.print(heapStats.max_size);
+  Serial.print(" heapReserved=");
+  Serial.print(heapStats.reserved_size);
+  Serial.print(" heapFails=");
+  Serial.print(heapStats.alloc_fail_cnt);
+  Serial.print(" stackMin=");
+  Serial.print(minimumStackFree);
+  Serial.print(" stackThread=");
+  Serial.println(minimumStackThread);
+}
+
+static void ProcessDeferredSettingsAction()
+{
+  if (g_pendingSettingsAction == EROS_SETTINGS_ACTION_NONE) {
+    return;
+  }
+
+  // Filesystem work must not run inside the LVGL button callback. Allow the
+  // complete press/release event sequence to finish before mounting QSPI and
+  // performing the blocking file operation.
+  if (millis() - g_pendingSettingsActionSetMs < 250UL) {
+    return;
+  }
+
+  const byte action = g_pendingSettingsAction;
+  g_pendingSettingsAction = EROS_SETTINGS_ACTION_NONE;
+
+  if (action == EROS_SETTINGS_ACTION_SAVE) {
+    Command_RequestSettingsSave();
+  }
+  else if (action == EROS_SETTINGS_ACTION_LOAD) {
+    Command_RequestSettingsLoad();
+  }
+
+  // The regular idle-screen refresh will display the recorded result after
+  // the filesystem has been cleanly unmounted.
+  HoldScreenRefresh(100UL);
 }
 
 // ------------------------------------------------------------
@@ -1037,6 +1192,8 @@ void GigaDisplay_Task()
   lv_timer_handler();
 
   ProcessDeferredNavigation();
+  ProcessDeferredSettingsAction();
+  PrintM7RuntimeDiagnostics();
 
   // Status arrives from M4 every 50 ms. Rewriting every label/style on every
   // pass through loop() adds LVGL churn without making the display fresher.
@@ -2675,16 +2832,26 @@ static void HitachiRelayMinBackButton_Event(lv_event_t * e)
 
 static void SaveSettingsButton_Event(lv_event_t * e)
 {
+  if (g_pendingSettingsAction != EROS_SETTINGS_ACTION_NONE) {
+    return;
+  }
+
   SetIdleStatusText("Saving settings...");
-  Command_RequestSettingsSave();
-  GigaDisplay_UpdateIdleSettingsResult();
+  g_pendingSettingsAction = EROS_SETTINGS_ACTION_SAVE;
+  g_pendingSettingsActionSetMs = millis();
+  HoldScreenRefresh(400UL);
 }
 
 static void LoadSettingsButton_Event(lv_event_t * e)
 {
+  if (g_pendingSettingsAction != EROS_SETTINGS_ACTION_NONE) {
+    return;
+  }
+
   SetIdleStatusText("Loading settings...");
-  Command_RequestSettingsLoad();
-  GigaDisplay_UpdateIdleSettingsResult();
+  g_pendingSettingsAction = EROS_SETTINGS_ACTION_LOAD;
+  g_pendingSettingsActionSetMs = millis();
+  HoldScreenRefresh(400UL);
 }
 
 // ------------------------------------------------------------

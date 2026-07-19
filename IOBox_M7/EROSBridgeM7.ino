@@ -532,8 +532,13 @@ unsigned long State_GetTransportLoopbackEchoAgeMs()
 
 bool State_GetTransportLoopbackOk()
 {
-  return (g_m7TransportLoopbackRequestCounter > 0) &&
-         (g_m7ControlStatus.transportLoopbackEchoId == g_m7TransportLoopbackRequestCounter);
+  // The main M7 runtime health check owns its own request counter rather than
+  // using Command_TransportLoopbackPing(). Judge health from the authoritative
+  // M4-reported request/echo pair so the display and web UI observe the same
+  // loopback result regardless of which M7 caller sent the ping.
+  return (g_m7ControlStatus.transportLoopbackEchoCounter > 0) &&
+         (g_m7ControlStatus.transportLoopbackRequestId ==
+          g_m7ControlStatus.transportLoopbackEchoId);
 }
 
 
