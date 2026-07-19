@@ -3,8 +3,8 @@
 
 // Enter the Wi-Fi network used by the phone/tablet and the GIGA.
 // Keep this file private if the project is committed to source control.
-#define EROS_WIFI_SSID "BootsAndIOT"
-#define EROS_WIFI_PASSWORD "booooobs"
+#define EROS_WIFI_SSID "CHANGE_ME"
+#define EROS_WIFI_PASSWORD "CHANGE_ME"
 
 #define EROS_WEB_ENABLED 1
 #define EROS_WEB_DIAGNOSTIC_CONNECT_THEN_DISCONNECT 0
