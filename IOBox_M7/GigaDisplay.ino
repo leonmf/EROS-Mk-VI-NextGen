@@ -179,7 +179,9 @@ enum EROSDeferredNavAction {
   NAV_ACTION_NONE,
   NAV_ACTION_AUTO_SETTINGS_BACK,
   NAV_ACTION_AUTO_SETTINGS_TIMING,
-  NAV_ACTION_AUTO_SETTINGS_OUTPUTS
+  NAV_ACTION_AUTO_SETTINGS_OUTPUTS,
+  NAV_ACTION_SHOW_HITACHI,
+  NAV_ACTION_HITACHI_BACK
 };
 
 static EROSDeferredNavAction g_pendingNavAction = NAV_ACTION_NONE;
@@ -908,6 +910,31 @@ static void ProcessDeferredNavigation()
       GigaDisplay_ShowAutoSettingsScreen();
     }
   }
+  else if (action == NAV_ACTION_SHOW_HITACHI) {
+    GigaDisplay_ShowHitachiScreen();
+    HoldScreenRefresh(250UL);
+  }
+  else if (action == NAV_ACTION_HITACHI_BACK) {
+    lv_obj_t * previousScreen = g_previousScreenBeforeHitachi;
+
+    // Keep the Hitachi screen allocated. Deleting an event's source screen
+    // during or shortly after its Back callback is an intermittent LVGL
+    // lifetime hazard.
+    if (previousScreen == g_manualScreen) {
+      GigaDisplay_ShowManualScreen();
+    }
+    else if (previousScreen == g_autoScreen) {
+      GigaDisplay_ShowAutoScreenDeferredSafe();
+    }
+    else if (previousScreen == g_statusScreen) {
+      GigaDisplay_ShowStatusScreen();
+    }
+    else {
+      GigaDisplay_ShowIdleScreen();
+    }
+
+    HoldScreenRefresh(250UL);
+  }
 }
 
 // ------------------------------------------------------------
@@ -954,6 +981,17 @@ void GigaDisplay_Task()
   lv_timer_handler();
 
   ProcessDeferredNavigation();
+
+  // Status arrives from M4 every 50 ms. Rewriting every label/style on every
+  // pass through loop() adds LVGL churn without making the display fresher.
+  // Keep touch/timer handling fast, but apply status to widgets only at the
+  // rate new status can arrive.
+  static unsigned long lastWidgetRefreshMs = 0;
+  const unsigned long nowMs = millis();
+  if (nowMs - lastWidgetRefreshMs < 50UL) {
+    return;
+  }
+  lastWidgetRefreshMs = nowMs;
 
   //Serial.println("Timer Handler");
 
@@ -2415,27 +2453,12 @@ static void AutoOutputInputButton_Event(lv_event_t * e)
 
 static void HitachiButton_Event(lv_event_t * e)
 {
-  GigaDisplay_ShowHitachiScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_SHOW_HITACHI);
 }
 
 static void HitachiBackButton_Event(lv_event_t * e)
 {
-  lv_obj_t * previousScreen = g_previousScreenBeforeHitachi;
-
-  if (previousScreen == g_manualScreen) {
-    GigaDisplay_ShowManualScreen();
-  }
-  else if (previousScreen == g_autoScreen) {
-    GigaDisplay_ShowAutoScreen();
-  }
-  else if (previousScreen == g_statusScreen) {
-    GigaDisplay_ShowStatusScreen();
-  }
-  else {
-    GigaDisplay_ShowIdleScreen();
-  }
-
-  GigaDisplay_DestroyHitachiScreen();
+  ScheduleDeferredNavigation(NAV_ACTION_HITACHI_BACK);
 }
 
 static void HitachiEditOnButton_Event(lv_event_t * e)

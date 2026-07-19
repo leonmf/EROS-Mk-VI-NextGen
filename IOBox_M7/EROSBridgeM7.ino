@@ -27,7 +27,16 @@ static unsigned long g_m7TransportCommandSendFailedCounter = 0;
 static unsigned long g_m7TransportLoopbackRequestCounter = 0;
 
 bool EROSTransport_SendCommandToM4(const EROS_Command & command);
-void State_ProcessPendingCommands();
+
+// LVGL event callbacks must not make synchronous RPC calls. RPC.call() can
+// block while M4 is busy, which would leave lv_timer_handler() stuck inside an
+// event callback and make the display appear frozen. Commands are therefore
+// queued here and sent later from the main M7 loop.
+static const byte M7_COMMAND_QUEUE_CAPACITY = 64;
+static EROS_Command g_m7CommandQueue[M7_COMMAND_QUEUE_CAPACITY];
+static byte g_m7CommandQueueHead = 0;
+static byte g_m7CommandQueueTail = 0;
+static byte g_m7CommandQueueDepth = 0;
 
 bool SettingsM7_SaveAll();
 bool SettingsM7_LoadAll();
@@ -43,16 +52,38 @@ bool Command_SubmitToControl(const EROS_Command & command)
 {
   g_m7TransportCommandSendAttemptCounter++;
 
-  bool accepted = EROSTransport_SendCommandToM4(command);
+  if (g_m7CommandQueueDepth >= M7_COMMAND_QUEUE_CAPACITY) {
+    g_m7TransportCommandSendFailedCounter++;
+    return false;
+  }
 
-  if (accepted) {
+  g_m7CommandQueue[g_m7CommandQueueTail] = command;
+  g_m7CommandQueueTail =
+    (byte)((g_m7CommandQueueTail + 1) % M7_COMMAND_QUEUE_CAPACITY);
+  g_m7CommandQueueDepth++;
+  return true;
+}
+
+void EROSBridgeM7_ProcessCommandQueue()
+{
+  if (g_m7CommandQueueDepth == 0) {
+    return;
+  }
+
+  // Send at most one command per main-loop pass. This keeps command bursts
+  // from monopolizing the same M7 thread that services LVGL and touch.
+  const EROS_Command command = g_m7CommandQueue[g_m7CommandQueueHead];
+
+  if (EROSTransport_SendCommandToM4(command)) {
     g_m7TransportCommandSendAcceptedCounter++;
   }
   else {
     g_m7TransportCommandSendFailedCounter++;
   }
 
-  return accepted;
+  g_m7CommandQueueHead =
+    (byte)((g_m7CommandQueueHead + 1) % M7_COMMAND_QUEUE_CAPACITY);
+  g_m7CommandQueueDepth--;
 }
 
 static void Command_Send(
