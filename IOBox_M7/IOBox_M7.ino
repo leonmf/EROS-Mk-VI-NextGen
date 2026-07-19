@@ -34,9 +34,6 @@ void GigaDisplay_Task();
 void EROSTransport_SetM4Ready(bool ready);
 void EROSTransport_PollM4Status();
 void EROSBridgeM7_ProcessCommandQueue();
-int EROSTransport_GetLastStatusSelector();
-unsigned long EROSTransport_GetCompletedSnapshotCounter();
-void GigaDisplay_PrintDiagnostics();
 bool SettingsM7_LoadAll();
 int SettingsM7_GetLastError();
 bool SettingsM7_GetLastOk();
@@ -55,7 +52,6 @@ static unsigned long g_m4ReadySeenMs = 0;
 static unsigned long g_lastLoopbackMs = 0;
 static unsigned long g_lastStatusPollMs = 0;
 static unsigned long g_loopbackRequestId = 0;
-static unsigned long g_lastDiagnosticMs = 0;
 
 // Read one status selector per slice. A complete 38-selector snapshot takes
 // roughly 75-100 ms, but LVGL/touch is serviced between every RPC call.
@@ -121,30 +117,6 @@ static void PrintSerialRPCMessages()
     g_m4Ready = true;
     EROSTransport_SetM4Ready(true);
   }
-}
-
-static void PrintRuntimeDiagnostics()
-{
-  if (!g_displayStarted)
-  {
-    return;
-  }
-
-  const unsigned long nowMs = millis();
-  if (nowMs - g_lastDiagnosticMs < 2000UL)
-  {
-    return;
-  }
-  g_lastDiagnosticMs = nowMs;
-
-  Serial.print("M7_DIAG millis=");
-  Serial.print(nowMs);
-  Serial.print(" lastRpcSelector=");
-  Serial.print(EROSTransport_GetLastStatusSelector());
-  Serial.print(" snapshots=");
-  Serial.print(EROSTransport_GetCompletedSnapshotCounter());
-  Serial.print(" ");
-  GigaDisplay_PrintDiagnostics();
 }
 
 static void TryStartSerialRPC()
@@ -363,7 +335,7 @@ void setup()
   Serial.println();
   Serial.println("M7: IOBox_M7 starting");
   Serial.println("M7: display startup waits for M4_READY_FOR_RPC and loopback pass");
-  Serial.println("M7: Command4 transport; 50ms status poll; guarded screen refresh");
+  Serial.println("M7: Command4 transport; sliced status polling; guarded screen refresh");
 }
 
 void loop()
@@ -392,6 +364,5 @@ void loop()
   }
 
   Heartbeat();
-  PrintRuntimeDiagnostics();
   delay(1);
 }

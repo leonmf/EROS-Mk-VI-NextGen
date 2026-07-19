@@ -23,18 +23,6 @@ static unsigned long g_transportCommandSendFailedCounter = 0;
 static unsigned long g_m7StatusPollCounter = 0;
 static unsigned long g_m7LastStatusPollMs = 0;
 static unsigned long g_m7AvgStatusPollPeriodMsX100 = 0;
-static volatile int g_m7LastStatusSelector = -1;
-static volatile unsigned long g_m7CompletedSnapshotCounter = 0;
-
-int EROSTransport_GetLastStatusSelector()
-{
-  return g_m7LastStatusSelector;
-}
-
-unsigned long EROSTransport_GetCompletedSnapshotCounter()
-{
-  return g_m7CompletedSnapshotCounter;
-}
 
 void EROSTransport_SetM4Ready(bool ready)
 {
@@ -135,7 +123,6 @@ void EROSTransport_PollM4Status()
   }
 
   const int selector = selectors[selectorIndex];
-  g_m7LastStatusSelector = selector;
   const int value = EROSTransport_ReadM4StatusValue(selector);
 
   switch (selector) {
@@ -238,7 +225,6 @@ void EROSTransport_PollM4Status()
 
     g_m7LastStatusPollMs = nowMs;
     g_m7StatusPollCounter++;
-    g_m7CompletedSnapshotCounter++;
     status.m7StatusPollCounter = g_m7StatusPollCounter;
     status.m7StatusPollAvgMsX100 =
       (unsigned int)g_m7AvgStatusPollPeriodMsX100;

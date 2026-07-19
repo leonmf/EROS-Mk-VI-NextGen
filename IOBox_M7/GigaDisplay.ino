@@ -1093,29 +1093,6 @@ void GigaDisplay_Task()
 
 }
 
-void GigaDisplay_PrintDiagnostics()
-{
-  lv_mem_monitor_t memory;
-  lv_mem_monitor(&memory);
-
-  Serial.print("screen=");
-  Serial.print((int)g_currentScreen);
-  Serial.print(" building=");
-  Serial.print(g_screenBuilding ? 1 : 0);
-  Serial.print(" refreshLocked=");
-  Serial.print(g_screenRefreshLocked ? 1 : 0);
-  Serial.print(" pendingNav=");
-  Serial.print((int)g_pendingNavAction);
-  Serial.print(" lvFree=");
-  Serial.print((unsigned long)memory.free_size);
-  Serial.print(" lvBiggest=");
-  Serial.print((unsigned long)memory.free_biggest_size);
-  Serial.print(" lvUsedPct=");
-  Serial.print((unsigned int)memory.used_pct);
-  Serial.print(" lvFragPct=");
-  Serial.println((unsigned int)memory.frag_pct);
-}
-
 static void GigaDisplay_DestroyAutoSettingsScreen()
 {
   if (g_autoSettingsScreen != NULL) {
